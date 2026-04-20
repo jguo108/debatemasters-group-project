@@ -34,11 +34,10 @@ function randomMinecraftAvatarUrl(): string {
 }
 
 function isAllowedMinecraftAvatar(url: string): boolean {
-  return MINECRAFT_AVATAR_URLS.has(url);
+  return MINECRAFT_AVATAR_OPTIONS.some((avatar) => avatar.url === url);
 }
 
 export function pickMinecraftAvatarBySeed(seed: string): string {
-  if (MINECRAFT_AVATAR_OPTIONS.length === 0) return mockUser.avatarUrl;
   let hash = 0;
   for (let i = 0; i < seed.length; i += 1) {
     hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
