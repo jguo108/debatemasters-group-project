@@ -1,0 +1,363 @@
+﻿@import "tailwindcss";
+
+/* Design tokens — aligned with Stitch HTML + DESIGN.md MD3-style palette */
+@theme inline {
+  --color-surface-container: #efeeed;
+  --color-on-surface: #1a1c1c;
+  --color-on-primary-container: #033400;
+  --color-on-primary: #ffffff;
+  --color-tertiary-fixed: #d1e4ff;
+  --color-background: #faf9f9;
+  --color-inverse-on-surface: #f1f0f0;
+  --color-on-secondary: #ffffff;
+  --color-secondary-fixed: #ffdbcf;
+  --color-surface-tint: #0d6e00;
+  --color-secondary-fixed-dim: #ebbcac;
+  --color-on-secondary-fixed: #2e150b;
+  --color-surface-container-lowest: #ffffff;
+  --color-secondary-container: #fdcdbc;
+  --color-on-tertiary-fixed-variant: #00497d;
+  --color-surface: #faf9f9;
+  --color-on-background: #1a1c1c;
+  --color-error-container: #ffdad6;
+  --color-surface-container-low: #f4f3f3;
+  --color-on-error: #ffffff;
+  --color-primary-fixed-dim: #80dc68;
+  --color-tertiary-container: #2397f4;
+  --color-on-error-container: #93000a;
+  --color-error: #ba1a1a;
+  --color-surface-variant: #e3e2e2;
+  --color-surface-bright: #faf9f9;
+  --color-on-tertiary-fixed: #001d36;
+  --color-tertiary-fixed-dim: #9ecaff;
+  --color-surface-container-highest: #e3e2e2;
+  --color-surface-dim: #dadada;
+  --color-inverse-surface: #2f3131;
+  --color-on-primary-fixed: #012200;
+  --color-on-secondary-container: #795548;
+  --color-inverse-primary: #80dc68;
+  --color-primary-container: #4da63a;
+  --color-on-surface-variant: #404a3b;
+  --color-surface-container-high: #e9e8e8;
+  --color-primary-fixed: #9bf981;
+  --color-on-secondary-fixed-variant: #603f33;
+  --color-secondary: #7a5649;
+  --color-outline-variant: #bfcab7;
+  --color-on-tertiary-container: #002d50;
+  --color-primary: #0d6e00;
+  --color-on-primary-fixed-variant: #085300;
+  --color-tertiary: #0061a4;
+  --color-outline: #707a69;
+  --color-on-tertiary: #ffffff;
+
+  --radius-none: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+}
+
+/* Nether onboarding — reference palette (deep burgundy + neon green #58B13E) */
+@layer base {
+  .theme-nether-dark {
+    --color-surface-container: #2d1b19;
+    --color-on-surface: #ffffff;
+    --color-on-background: #ffffff;
+    --color-background: #1a0806;
+    --color-surface: #1a0806;
+    --color-surface-container-lowest: #1f1210;
+    --color-surface-container-low: #2d1b19;
+    --color-surface-container-high: #3d2622;
+    --color-surface-container-highest: #4a2e28;
+    --color-secondary: #a14436;
+    --color-primary: #58b13e;
+  }
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+.voxel-shadow {
+  box-shadow: 6px 6px 0px 0px rgba(0, 0, 0, 0.8);
+}
+
+.voxel-shadow-small {
+  box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.6);
+}
+
+.voxel-inset {
+  box-shadow: inset 4px 4px 0px 0px rgba(0, 0, 0, 0.4);
+}
+
+.pixel-text-xs {
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.pixel-text-sm {
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.pixel-text-base {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.pixel-text-lg {
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.pixel-text-xl {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.voxel-text-glow {
+  text-shadow: 4px 4px 0px rgba(13, 110, 0, 1);
+}
+
+.nether-glow {
+  text-shadow: 6px 6px 0px rgba(154, 52, 18, 1);
+}
+
+/* Landing hero — ~30% smaller than prior clamp; offset shadow scaled down */
+.hero-title-master {
+  font-family: var(--font-press-start), cursive;
+  font-size: clamp(2.1rem, 9.8vw + 0.35rem, 7.7rem);
+  line-height: 1;
+  letter-spacing: -0.07em;
+  text-shadow:
+    2px 2px 0 rgba(100, 38, 14, 0.95),
+    4px 4px 0 rgba(154, 52, 18, 1),
+    7px 7px 0 rgba(60, 22, 8, 0.88),
+    10px 10px 0 rgba(20, 8, 4, 0.55);
+}
+
+@media (min-width: 1280px) {
+  .hero-title-master {
+    font-size: min(7.7rem, 8.4vw);
+  }
+}
+
+.headline {
+  font-family: var(--font-space-grotesk), ui-sans-serif, sans-serif;
+}
+
+.inner-carve {
+  box-shadow: inset 4px 4px 0px 0px rgba(0, 0, 0, 0.4);
+}
+
+.hard-shadow-primary {
+  box-shadow: 6px 6px 0px 0px #085300;
+}
+
+.hard-shadow-orange {
+  box-shadow: 6px 6px 0px 0px #7c2d12;
+}
+
+.hard-shadow-stone {
+  box-shadow: 6px 6px 0px 0px #292524;
+}
+
+.nether-bg-onboarding {
+  background-color: #1a0806;
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(15, 6, 4, 0.48) 0%,
+      rgba(26, 8, 6, 0.34) 40%,
+      rgba(34, 16, 16, 0.34) 60%,
+      rgba(15, 6, 4, 0.5) 100%
+    ),
+    radial-gradient(circle at 50% 45%, rgba(88, 177, 62, 0.05) 0%, transparent 55%),
+    url("/onboarding-nether-bg.png");
+  background-position:
+    center,
+    center,
+    center;
+  background-size:
+    cover,
+    cover,
+    cover;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+.nether-bg-onboarding::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: url("https://www.transparenttextures.com/patterns/carbon-fibre.png");
+  opacity: 0.02;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.nether-bg-topics {
+  background-color: #2e150b;
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(20, 8, 5, 0.62) 0%,
+      rgba(34, 13, 8, 0.48) 45%,
+      rgba(20, 8, 5, 0.62) 100%
+    ),
+    url("/onboarding-nether-bg.png");
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+.voxel-glow {
+  box-shadow:
+    0 0 40px rgba(186, 26, 26, 0.4),
+    inset 0 0 20px rgba(13, 110, 0, 0.2);
+}
+
+.font-headline-pixel {
+  font-family: var(--font-press-start), cursive;
+  line-height: 1.2;
+  letter-spacing: -0.05em;
+}
+
+.debate-room-pixel-bg {
+  background-image: url("/onboarding-nether-bg.png");
+  background-size: cover;
+  background-attachment: fixed;
+  background-position: center;
+}
+
+.nether-overlay-room {
+  background:
+    linear-gradient(rgba(18, 4, 4, 0.9), rgba(42, 0, 0, 0.82)),
+    radial-gradient(circle, rgba(20, 0, 0, 0.32) 15%, rgba(12, 0, 0, 0.94) 100%);
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.pixel-bg-grid {
+  background-color: #120404;
+  background-image:
+    linear-gradient(45deg, rgba(150, 0, 0, 0.05) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(150, 0, 0, 0.05) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(150, 0, 0, 0.05) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(150, 0, 0, 0.05) 75%);
+  background-size: 40px 40px;
+}
+
+.glow-red {
+  text-shadow:
+    0 0 10px rgba(255, 0, 0, 0.8),
+    0 0 20px rgba(255, 69, 0, 0.5);
+}
+
+.glow-white {
+  text-shadow:
+    0 0 10px rgba(255, 255, 255, 0.6),
+    0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.results-nether-bg {
+  background-color: #2e0909;
+  background-image:
+    radial-gradient(circle at 50% 100%, #ff3c00 0%, transparent 60%),
+    radial-gradient(circle at 80% 20%, #4b0000 0%, transparent 40%),
+    radial-gradient(circle at 20% 50%, #3a0000 0%, transparent 50%),
+    url("/onboarding-nether-bg.png");
+  background-attachment: fixed;
+  background-size: auto, auto, auto, cover;
+  background-position: center, center, center, center;
+}
+
+.nether-haze-results {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 0%, rgba(20, 0, 0, 0.6) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.crimson-particles {
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(#ff4d00 0.5px, transparent 0.5px);
+  background-size: 40px 40px;
+  opacity: 0.15;
+  animation: dm-drift 20s linear infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@keyframes dm-drift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 40px -80px;
+  }
+}
+
+.lava-flow-line {
+  position: absolute;
+  width: 100%;
+  height: 8px;
+  background: linear-gradient(90deg, transparent, #ff9500, #ff4d00, #ff9500, transparent);
+  box-shadow: 0 0 30px #ff4d00;
+  opacity: 0.4;
+  filter: blur(1px);
+}
+
+.pixel-shadow-results {
+  box-shadow: 4px 4px 0 0 rgba(0, 0, 0, 0.5);
+}
+
+.pixel-shadow-primary {
+  box-shadow: 4px 4px 0 0 #012200;
+}
+
+.pixel-shadow-secondary {
+  box-shadow: 4px 4px 0 0 #2e150b;
+}
+
+.matchmaking-nether-bg {
+  background-color: #1a0505;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(255, 60, 0, 0.2) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(255, 30, 0, 0.15) 0%, transparent 35%),
+    linear-gradient(rgba(26, 5, 5, 0.85), rgba(26, 5, 5, 0.85)),
+    url("/onboarding-nether-bg.png");
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: overlay, overlay, normal, normal;
+}
+
+.voxel-vignette {
+  background: radial-gradient(circle, transparent 30%, rgba(20, 0, 0, 0.8) 100%);
+  pointer-events: none;
+}
+
+.nether-haze-match {
+  backdrop-filter: blur(3px);
+  background: rgba(30, 0, 0, 0.3);
+}
+
+.lava-glow-block {
+  box-shadow: 0 0 45px 15px rgba(255, 40, 0, 0.35);
+}
+
+.pixel-overlay-match {
+  background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h20v20H0V0zm20 20h20v20H20V20z' fill='%23000' fill-opacity='0.15' fill-rule='evenodd'/%3E%3C/svg%3E");
+}
+
+.brick-sans {
+  font-family: var(--font-silkscreen), var(--font-space-grotesk), ui-sans-serif, sans-serif;
+  letter-spacing: -0.05em;
+}

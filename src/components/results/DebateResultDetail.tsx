@@ -1,0 +1,218 @@
+﻿import { MaterialIcon } from "@/components/MaterialIcon";
+import type { DebateResult } from "@/lib/data/types";
+
+const sans =
+  "font-[family-name:var(--font-inter)] antialiased text-pretty" as const;
+
+const headlineTitleClass =
+  "brick-sans text-3xl font-black uppercase leading-none tracking-tighter text-white drop-shadow-[4px_4px_0px_rgba(0,0,0,0.8)] md:text-5xl";
+
+function formatTranscriptTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "UTC",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function ResultHeadline({ headline }: { headline: string }) {
+  const words = headline.trim().split(/\s+/);
+  if (words.length <= 1) {
+    return <h1 className={headlineTitleClass}>{headline}</h1>;
+  }
+  const last = words.pop()!;
+  const rest = words.join(" ");
+  return (
+    <h1 className={headlineTitleClass}>
+      {rest} <br />
+      <span className="text-[#58B13E]">{last}</span>
+    </h1>
+  );
+}
+
+export function DebateResultDetail({ r }: { r: DebateResult }) {
+  const xpPct = Math.round((r.xpCurrent / r.xpToNext) * 100);
+
+  return (
+    <div className={`relative z-20 mx-auto max-w-5xl p-8 md:p-12 ${sans}`}>
+      <div className="mb-12 text-center">
+        <ResultHeadline headline={r.headline} />
+        <p className="mt-4 text-base font-semibold uppercase tracking-wide text-orange-500 md:text-lg">
+          {r.subline}
+        </p>
+        <p className="mt-3 text-sm font-medium uppercase tracking-wide text-stone-400">
+          {r.topicTitle}
+        </p>
+      </div>
+
+      <div className="mb-16">
+        <div className="mb-2 flex items-end justify-between">
+          <span className="text-lg font-bold uppercase tracking-wide text-primary-fixed md:text-xl">
+            Level {r.level}
+          </span>
+          <span className="text-sm font-semibold tabular-nums text-stone-300">
+            {r.xpCurrent.toLocaleString()} / {r.xpToNext.toLocaleString()} XP
+          </span>
+        </div>
+        <div className="pixel-shadow-results relative h-10 overflow-hidden border-4 border-stone-800 bg-black">
+          <div
+            className="h-full border-r-4 border-primary bg-primary-fixed shadow-[inset_0_4px_0_rgba(255,255,255,0.4)]"
+            style={{ width: `${xpPct}%` }}
+          />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span className="text-[11px] font-bold tracking-widest text-white">
+              +{r.xpEarned} XP earned
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-10 md:grid-cols-12">
+        <div className="relative group md:col-span-7">
+          <div className="absolute -top-4 -left-4 h-full w-full bg-black" />
+          <div className="relative border-4 border-secondary bg-stone-100 p-6 shadow-lg md:p-8">
+            <div className="mb-6 flex items-center gap-3 border-b border-stone-300 pb-4">
+              <MaterialIcon
+                name="menu_book"
+                className="scale-125 text-secondary"
+                filled
+              />
+              <h2 className="text-lg font-bold uppercase tracking-wide text-secondary md:text-xl">
+                Master&apos;s feedback
+              </h2>
+            </div>
+            <div className="space-y-4 leading-relaxed text-stone-900">
+              <p className="clearfix text-base font-normal first-letter:float-left first-letter:mr-2 first-letter:mt-1 first-letter:font-extrabold first-letter:text-5xl first-letter:leading-none first-letter:text-primary">
+                {r.feedback}
+              </p>
+              <div className="border-l-4 border-primary bg-stone-200/90 p-4 text-sm italic leading-relaxed text-stone-800">
+                &quot;{r.quote}&quot;
+              </div>
+              <div className="mt-6 grid grid-cols-2 gap-4">
+                <div className="border-2 border-primary bg-primary-fixed-dim/90 p-4">
+                  <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-800">
+                    Clarity
+                  </span>
+                  <span className="text-3xl font-extrabold tabular-nums text-stone-900">
+                    {r.scores.clarity}
+                  </span>
+                </div>
+                <div className="border-2 border-tertiary bg-tertiary-fixed-dim/90 p-4">
+                  <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-800">
+                    Evidence
+                  </span>
+                  <span className="text-3xl font-extrabold tabular-nums text-stone-900">
+                    {r.scores.evidence}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="mx-auto mt-0 h-6 w-3/4 border-x-8 border-black bg-stone-800 shadow-[0_4px_0_#000]" />
+          <div className="mx-auto mt-0 h-4 w-1/2 border-x-8 border-black bg-stone-900 shadow-[0_4px_0_#000]" />
+        </div>
+
+        <div className="space-y-6 md:col-span-5">
+          <h3 className="flex items-center gap-2 text-base font-bold uppercase tracking-wide text-white md:text-lg">
+            <MaterialIcon name="auto_stories" filled />
+            Suggested tome study
+          </h3>
+
+          {r.suggestedTomes.map((tome, index) => (
+            <a
+              key={`${r.id}-tome-${index}`}
+              href="#"
+              className={`group relative block border-4 border-black p-5 transition-transform hover:-translate-y-1 pixel-shadow md:p-6 ${
+                tome.accent === "tertiary" ? "bg-tertiary" : "bg-primary"
+              }`}
+            >
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/20 to-transparent" />
+              <div className="relative flex items-start gap-4">
+                <div className="relative flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden border-4 border-white/60 bg-[#b24bf3] pixel-shadow">
+                  <div className="absolute top-0 left-0 h-full w-full -rotate-45 bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+                  <MaterialIcon name={tome.icon} className="text-3xl text-white" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-sm font-bold uppercase leading-snug tracking-wide text-white md:text-base">
+                    {tome.title}
+                  </h4>
+                  <p
+                    className={`mt-1 text-xs font-semibold uppercase tracking-wide opacity-90 ${
+                      tome.accent === "tertiary"
+                        ? "text-tertiary-fixed"
+                        : "text-primary-fixed"
+                    }`}
+                  >
+                    {tome.subtitle}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="bg-black/40 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
+                  {tome.kind === "enchanted" ? "Enchanted" : "Rare"}
+                </span>
+                <span className="bg-black/40 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
+                  {tome.label}
+                </span>
+              </div>
+            </a>
+          ))}
+
+          <div className="border-4 border-stone-800 bg-black p-6 pixel-shadow">
+            <h4 className="mb-4 border-b border-stone-700 pb-2 text-xs font-bold uppercase tracking-wide text-stone-100">
+              Loot dropped
+            </h4>
+            <ul className="space-y-3">
+              {r.loot.map((item, index) => (
+                <li key={`${r.id}-loot-${index}`} className="flex items-center gap-3">
+                  <div
+                    className={`h-8 w-8 shrink-0 border-4 ${
+                      item.tone === "gold"
+                        ? "border-yellow-700 bg-yellow-400"
+                        : "border-emerald-700 bg-emerald-400"
+                    }`}
+                  />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-stone-300">
+                    {item.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <section className="mt-14 border-4 border-stone-800 bg-black/75 p-5 pixel-shadow md:p-6">
+        <h3 className="mb-4 flex items-center gap-2 border-b border-stone-700 pb-2 text-sm font-bold uppercase tracking-wide text-stone-100 md:text-base">
+          <MaterialIcon name="history_edu" />
+          Full transcript
+        </h3>
+        <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
+          {r.transcript.map((entry, index) => (
+            <div
+              key={`${r.id}-transcript-${index}-${entry.at}`}
+              className="border border-stone-700 bg-stone-900/70 p-3"
+            >
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-orange-300">
+                  {entry.speaker}
+                </span>
+                <span className="text-[10px] font-medium uppercase tracking-wide text-stone-500">
+                  {formatTranscriptTime(entry.at)}
+                </span>
+              </div>
+              <p className="text-xs leading-relaxed text-stone-200 whitespace-pre-wrap">
+                {entry.text}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+    </div>
+  );
+}
