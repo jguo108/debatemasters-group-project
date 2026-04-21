@@ -3,13 +3,26 @@
 import { useSyncExternalStore } from "react";
 import { mockDebateHistory } from "@/lib/data/mock/fixtures";
 import type { DebateResult, DebateTranscriptEntry } from "@/lib/data/types";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
 
-const HISTORY_STORAGE_KEY = "debate-history-v1";
+export const HISTORY_STORAGE_KEY = "debate-history-v1";
 const HISTORY_HIDDEN_IDS_KEY = "debate-history-hidden-ids-v1";
 const ACTIVE_TRANSCRIPT_PREFIX = "debate-active-transcript:";
 const historyListeners = new Set<() => void>();
+/** Stable snapshot while auth-backed history is loading — `[]` literals break useSyncExternalStore. */
+const EMPTY_DEBATE_HISTORY: DebateResult[] = [];
 let cachedStorageRaw: string | null = null;
 let cachedHistorySnapshot: DebateResult[] | null = null;
+
+let sessionMode: "unknown" | "guest" | "authed" = "unknown";
+let fetchingAuthed = false;
+let supabaseHistoryRows: DebateResult[] | null = null;
+let resolveStarted = false;
+let authHistoryHooked = false;
+
+function notifyHistoryListeners(): void {
+  historyListeners.forEach((listener) => listener());
+}
 
 export type ForfeitMeta = {
   sessionId: string;
@@ -19,7 +32,9 @@ export type ForfeitMeta = {
   debateFormat?: "wsda";
 };
 
-function fallbackTranscript(result: Pick<DebateResult, "topicTitle" | "headline" | "subline" | "debatedAt">): DebateTranscriptEntry[] {
+function fallbackTranscript(
+  result: Pick<DebateResult, "topicTitle" | "headline" | "subline" | "debatedAt">,
+): DebateTranscriptEntry[] {
   return [
     {
       speaker: "System",
@@ -34,7 +49,7 @@ function fallbackTranscript(result: Pick<DebateResult, "topicTitle" | "headline"
   ];
 }
 
-function normalizeDebateResult(value: DebateResult): DebateResult {
+export function normalizeDebateResult(value: DebateResult): DebateResult {
   return {
     ...value,
     transcript:
@@ -73,7 +88,7 @@ export function readStoredDebateHistory(): DebateResult[] {
 function writeStoredDebateHistory(history: DebateResult[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
-  historyListeners.forEach((listener) => listener());
+  notifyHistoryListeners();
 }
 
 function readHiddenDebateIds(): Set<string> {
@@ -94,29 +109,192 @@ function writeHiddenDebateIds(ids: Set<string>) {
   window.localStorage.setItem(HISTORY_HIDDEN_IDS_KEY, JSON.stringify([...ids]));
 }
 
-export function appendDebateResultToHistory(result: DebateResult): DebateResult[] {
-  const current = readStoredDebateHistory();
-  const next = [result, ...current.filter((r) => r.id !== result.id)];
+function mergeLocalAndMock(): DebateResult[] {
+  const stored = readStoredDebateHistory();
   const hiddenIds = readHiddenDebateIds();
-  if (hiddenIds.has(result.id)) {
-    hiddenIds.delete(result.id);
+  const existingIds = new Set(stored.map((r) => r.id));
+  const merged = [
+    ...stored.filter((r) => !hiddenIds.has(r.id)),
+    ...mockDebateHistory
+      .filter((r) => !existingIds.has(r.id) && !hiddenIds.has(r.id))
+      .map(normalizeDebateResult),
+  ];
+  return merged.sort((a, b) => +new Date(b.debatedAt) - +new Date(a.debatedAt));
+}
+
+function mergeServerSide(): DebateResult[] {
+  const stored: DebateResult[] = [];
+  const hiddenIds = new Set<string>();
+  const existingIds = new Set(stored.map((r) => r.id));
+  const merged = [
+    ...stored.filter((r) => !hiddenIds.has(r.id)),
+    ...mockDebateHistory
+      .filter((r) => !existingIds.has(r.id) && !hiddenIds.has(r.id))
+      .map(normalizeDebateResult),
+  ];
+  return merged.sort((a, b) => +new Date(b.debatedAt) - +new Date(a.debatedAt));
+}
+
+async function resolveHistoryFromAuth(): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    sessionMode = "guest";
+    supabaseHistoryRows = null;
+    fetchingAuthed = false;
+    notifyHistoryListeners();
+    return;
+  }
+
+  const supabase = createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.user) {
+    sessionMode = "guest";
+    supabaseHistoryRows = null;
+    fetchingAuthed = false;
+    notifyHistoryListeners();
+    return;
+  }
+
+  sessionMode = "authed";
+  fetchingAuthed = true;
+  notifyHistoryListeners();
+
+  const { data, error } = await supabase
+    .from("debate_results")
+    .select("payload")
+    .eq("user_id", session.user.id)
+    .eq("hidden", false)
+    .order("debated_at", { ascending: false });
+
+  fetchingAuthed = false;
+  if (error) {
+    supabaseHistoryRows = [];
+  } else {
+    supabaseHistoryRows = (data ?? []).map((row) =>
+      normalizeDebateResult(row.payload as DebateResult),
+    );
+  }
+  notifyHistoryListeners();
+}
+
+function ensureHistoryAuthListener(): void {
+  if (authHistoryHooked || !isSupabaseConfigured()) return;
+  authHistoryHooked = true;
+  const supabase = createClient();
+  supabase.auth.onAuthStateChange(() => {
+    sessionMode = "unknown";
+    supabaseHistoryRows = null;
+    resolveStarted = false;
+    void ensureHistoryResolved();
+  });
+}
+
+async function ensureHistoryResolved(): Promise<void> {
+  if (resolveStarted) return;
+  resolveStarted = true;
+  try {
+    await resolveHistoryFromAuth();
+  } catch {
+    resolveStarted = false;
+    sessionMode = "guest";
+    supabaseHistoryRows = null;
+    notifyHistoryListeners();
+  }
+}
+
+export async function appendDebateResultToHistory(
+  result: DebateResult,
+): Promise<DebateResult[]> {
+  const normalized = normalizeDebateResult(result);
+
+  if (isSupabaseConfigured()) {
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.user) {
+      const { error } = await supabase.from("debate_results").insert({
+        id: normalized.id,
+        user_id: session.user.id,
+        payload: normalized as unknown as Record<string, unknown>,
+        debated_at: normalized.debatedAt,
+        hidden: false,
+      });
+      if (error) {
+        console.warn("appendDebateResultToHistory:", error.message);
+      }
+      sessionMode = "authed";
+      fetchingAuthed = false;
+      if (supabaseHistoryRows) {
+        supabaseHistoryRows = [
+          normalized,
+          ...supabaseHistoryRows.filter((r) => r.id !== normalized.id),
+        ].sort((a, b) => +new Date(b.debatedAt) - +new Date(a.debatedAt));
+      } else {
+        supabaseHistoryRows = [normalized];
+      }
+      notifyHistoryListeners();
+      return getCombinedDebateHistory();
+    }
+  }
+
+  const current = readStoredDebateHistory();
+  const next = [normalized, ...current.filter((r) => r.id !== normalized.id)];
+  const hiddenIds = readHiddenDebateIds();
+  if (hiddenIds.has(normalized.id)) {
+    hiddenIds.delete(normalized.id);
     writeHiddenDebateIds(hiddenIds);
   }
   writeStoredDebateHistory(next);
-  return next;
+  return getCombinedDebateHistory();
 }
 
-export function removeDebateResultFromHistory(id: string): DebateResult[] {
+export async function removeDebateResultFromHistory(id: string): Promise<DebateResult[]> {
+  if (isSupabaseConfigured()) {
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.user) {
+      await supabase
+        .from("debate_results")
+        .update({ hidden: true })
+        .eq("id", id)
+        .eq("user_id", session.user.id);
+      if (supabaseHistoryRows) {
+        supabaseHistoryRows = supabaseHistoryRows.filter((r) => r.id !== id);
+      }
+      notifyHistoryListeners();
+      return getCombinedDebateHistory();
+    }
+  }
+
   const current = readStoredDebateHistory();
   const next = current.filter((r) => r.id !== id);
   const hiddenIds = readHiddenDebateIds();
   hiddenIds.add(id);
   writeHiddenDebateIds(hiddenIds);
   writeStoredDebateHistory(next);
-  return next;
+  return getCombinedDebateHistory();
 }
 
 export function getCombinedDebateHistory(): DebateResult[] {
+  if (typeof window === "undefined") {
+    return mergeServerSide();
+  }
+
+  ensureHistoryAuthListener();
+  void ensureHistoryResolved();
+
+  if (isSupabaseConfigured() && sessionMode === "authed" && fetchingAuthed) {
+    return EMPTY_DEBATE_HISTORY;
+  }
+  if (isSupabaseConfigured() && sessionMode === "authed" && supabaseHistoryRows !== null) {
+    return supabaseHistoryRows;
+  }
+
   if (typeof window !== "undefined") {
     const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
     const hiddenRaw = window.localStorage.getItem(HISTORY_HIDDEN_IDS_KEY);
@@ -127,21 +305,10 @@ export function getCombinedDebateHistory(): DebateResult[] {
     cachedStorageRaw = cacheKey;
   }
 
-  const stored = readStoredDebateHistory();
-  const hiddenIds = readHiddenDebateIds();
-  const existingIds = new Set(stored.map((r) => r.id));
-  const merged = [
-    ...stored.filter((r) => !hiddenIds.has(r.id)),
-    ...mockDebateHistory
-      .filter((r) => !existingIds.has(r.id) && !hiddenIds.has(r.id))
-      .map(normalizeDebateResult),
-  ];
-  const sorted = merged.sort((a, b) => +new Date(b.debatedAt) - +new Date(a.debatedAt));
-
+  const sorted = mergeLocalAndMock();
   if (typeof window !== "undefined") {
     cachedHistorySnapshot = sorted;
   }
-
   return sorted;
 }
 
@@ -182,6 +349,7 @@ export function readActiveDebateTranscript(sessionId: string): DebateTranscriptE
 
 function subscribeToHistory(callback: () => void): () => void {
   historyListeners.add(callback);
+  void ensureHistoryResolved();
   const onStorage = (event: StorageEvent) => {
     if (event.key !== HISTORY_STORAGE_KEY) return;
     callback();

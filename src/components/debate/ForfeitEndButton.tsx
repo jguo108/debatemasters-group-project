@@ -48,11 +48,11 @@ export function ForfeitEndButton({
         confirmMessage={confirmMessage}
         modalRootId={modalRootId}
         onCancel={() => setShowConfirm(false)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (isEnding) return;
           setIsEnding(true);
           const result = createForfeitResult(sessionMeta);
-          appendDebateResultToHistory(result);
+          await appendDebateResultToHistory(result);
           router.push(`/results/${encodeURIComponent(result.id)}`);
         }}
       />

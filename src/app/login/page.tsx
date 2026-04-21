@@ -1,12 +1,48 @@
 ﻿"use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { MaterialIcon } from "@/components/MaterialIcon";
+import { migrateLocalDataToSupabaseIfNeeded } from "@/lib/data/local-migration";
 import { ensureUserProfileInitialized } from "@/lib/data/profile-storage";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
 
 export default function LoginPage() {
-  function handleLogin() {
-    ensureUserProfileInitialized();
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    setError(null);
+    if (!isSupabaseConfigured()) {
+      setError("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      return;
+    }
+    if (!email.trim() || !password) {
+      setError("Enter email and password.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const { error: signError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (signError) {
+        setError(signError.message);
+        return;
+      }
+      ensureUserProfileInitialized();
+      await migrateLocalDataToSupabaseIfNeeded();
+      router.push("/onboarding");
+      router.refresh();
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -15,7 +51,7 @@ export default function LoginPage() {
         <img
           alt=""
           className="h-full w-full object-cover opacity-60 mix-blend-multiply"
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBWHLIPMZk8okq_po_SU4tMFq12VjPTr0EadH_CRZVrG9N1eCak5kxqdcigekqODLvAXoh1LbQGimrSekl5QdCEQDFMWg79i4oWsEFmJ8Cqv0VnHK0XBUVsYE69cHHvpelWbRuCM4nsmY9RZo-Um7ePia408GTIiekT0IHzot8lwacbrAicZLXe_Za_5QLIOIVW3e0OmUmeikZVb0CnWTsJSn6WcDUKNmSzjXJ5rn8EplUxWueFWu4uJihdB3Wpkz3lQGrkuJt0lbyl"
+          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBWHLIPMZk8okq_po_SU4tMFq12VjPTr0EadH_CRZVrG9N1eCak5kxqdcigekqODLvAXoh1LbQGimrSekl5QdCEQDFMWg79i4oWsEFmJ8Cqv0VnHK0XBUVsYE69cHHvpelWbRuCM4nsmY9RZo-Um7ePia408GTIiekT0IHzot8lwacbrAicLXe_Za_5QLIOIVW3e0OmUmeikZVb0CnWTsJSn6WcDUKNmSzjXJ5rn8EplUxWueFWu4uJihdB3Wpkz3lQGrkuJt0lbyl"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-red-900/40 via-transparent to-stone-950/80" />
         <div className="absolute bottom-0 h-1/3 w-full bg-gradient-to-t from-orange-600/20 to-transparent" />
@@ -59,14 +95,21 @@ export default function LoginPage() {
               </div>
               <div className="flex-grow space-y-4">
                 <div className="space-y-2">
-                  <label className="pixel-text-xs block font-bold uppercase tracking-widest text-orange-500">
-                    Player Name
+                  <label
+                    htmlFor="login-email"
+                    className="pixel-text-xs block font-bold uppercase tracking-widest text-orange-500"
+                  >
+                    Email
                   </label>
                   <div className="group relative">
                     <input
+                      id="login-email"
                       className="brick-sans voxel-inset w-full border-none bg-stone-950 py-3 px-4 pixel-text-sm font-bold uppercase text-white placeholder:text-stone-700 transition-all focus:ring-4 focus:ring-green-500/30"
-                      placeholder="ENTR_USERNAME"
-                      type="text"
+                      placeholder="you@example.com"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                     />
                     <div className="absolute right-3 top-3 text-stone-700">
                       <MaterialIcon name="person" />
@@ -74,14 +117,21 @@ export default function LoginPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="pixel-text-xs block font-bold uppercase tracking-widest text-orange-500">
-                    Secret Seed
+                  <label
+                    htmlFor="login-password"
+                    className="pixel-text-xs block font-bold uppercase tracking-widest text-orange-500"
+                  >
+                    Password
                   </label>
                   <div className="group relative">
                     <input
+                      id="login-password"
                       className="brick-sans voxel-inset w-full border-none bg-stone-950 py-3 px-4 pixel-text-sm font-bold text-white placeholder:text-stone-700 transition-all focus:ring-4 focus:ring-green-500/30"
                       placeholder="••••••••"
                       type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
                     />
                     <div className="absolute right-3 top-3 text-stone-700">
                       <MaterialIcon name="key" />
@@ -90,14 +140,20 @@ export default function LoginPage() {
                 </div>
               </div>
             </div>
+            {error ? (
+              <p className="border-2 border-red-800 bg-red-950/50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-red-200">
+                {error}
+              </p>
+            ) : null}
             <div className="flex flex-col gap-4">
-              <Link
-                href="/onboarding"
-                onClick={handleLogin}
-                className="brick-sans block w-full text-center voxel-shadow-small border-t-4 border-green-400 bg-green-600 py-4 pixel-text-base font-black uppercase tracking-tighter text-stone-950 transition-all duration-75 hover:bg-green-500 active:translate-x-1 active:translate-y-1 active:shadow-none"
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void handleLogin()}
+                className="brick-sans block w-full text-center voxel-shadow-small border-t-4 border-green-400 bg-green-600 py-4 pixel-text-base font-black uppercase tracking-tighter text-stone-950 transition-all duration-75 hover:bg-green-500 active:translate-x-1 active:translate-y-1 active:shadow-none disabled:opacity-60"
               >
-                LOG IN
-              </Link>
+                {loading ? "..." : "LOG IN"}
+              </button>
               <div className="flex items-center justify-between px-1">
                 <a
                   href="#"

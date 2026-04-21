@@ -23,10 +23,15 @@ export default function ProfilePage() {
     ensureUserProfileInitialized();
   }, []);
 
-  function saveProfile() {
+  useEffect(() => {
+    setDisplayName(user.displayName);
+    setSelectedAvatar(user.avatarUrl);
+  }, [user.displayName, user.avatarUrl]);
+
+  async function saveProfile() {
     const cleaned = displayName.trim().slice(0, 24);
     if (!cleaned) return;
-    updateUserProfile({ displayName: cleaned, avatarUrl: selectedAvatar });
+    await updateUserProfile({ displayName: cleaned, avatarUrl: selectedAvatar });
     setDisplayName(cleaned);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1600);
@@ -132,7 +137,7 @@ export default function ProfilePage() {
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={saveProfile}
+              onClick={() => void saveProfile()}
               disabled={!canSave}
               className={`brick-sans inline-flex items-center gap-2 border-b-4 border-r-4 px-6 py-3 text-xs font-black uppercase tracking-widest transition-all ${
                 canSave

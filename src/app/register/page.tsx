@@ -1,12 +1,88 @@
 ﻿"use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { MaterialIcon } from "@/components/MaterialIcon";
-import { ensureUserProfileInitialized } from "@/lib/data/profile-storage";
+import { migrateLocalDataToSupabaseIfNeeded } from "@/lib/data/local-migration";
+import { pickMinecraftAvatarBySeed } from "@/lib/data/profile-storage";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
+
+function formatSignUpError(message: string): string {
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("already registered") ||
+    lower.includes("already been registered") ||
+    lower.includes("user already") ||
+    lower.includes("email address is already")
+  ) {
+    return "That email is already registered in Auth (not just the profile table). Use Log In with the same password, or in Supabase Dashboard open Authentication → Users, delete that user, then you can sign up again.";
+  }
+  return message;
+}
 
 export default function RegisterPage() {
-  function handleJoinArena() {
-    ensureUserProfileInitialized();
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleJoinArena() {
+    setError(null);
+    if (!isSupabaseConfigured()) {
+      setError("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      return;
+    }
+    const name = displayName.trim().slice(0, 24);
+    if (!email.trim() || !password || password.length < 6) {
+      setError("Enter email, password (min 6 characters), and player name.");
+      return;
+    }
+    if (!name) {
+      setError("Enter a player name.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const avatarUrl = pickMinecraftAvatarBySeed(email.trim() + name);
+      const { data, error: signError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            display_name: name,
+            avatar_url: avatarUrl,
+          },
+        },
+      });
+      if (signError) {
+        setError(formatSignUpError(signError.message));
+        return;
+      }
+      if (data.session?.user) {
+        await supabase
+          .from("profiles")
+          .update({
+            display_name: name,
+            avatar_url: avatarUrl,
+          })
+          .eq("id", data.session.user.id);
+      }
+      if (data.session) {
+        await migrateLocalDataToSupabaseIfNeeded();
+        router.push("/onboarding");
+        router.refresh();
+      } else {
+        setError(
+          "Check your email to confirm your account, then return here to log in.",
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -15,7 +91,7 @@ export default function RegisterPage() {
         <img
           alt=""
           className="h-full w-full object-cover opacity-60 mix-blend-multiply"
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBWHLIPMZk8okq_po_SU4tMFq12VjPTr0EadH_CRZVrG9N1eCak5kxqdcigekqODLvAXoh1LbQGimrSekl5QdCEQDFMWg79i4oWsEFmJ8Cqv0VnHK0XBUVsYE69cHHvpelWbRuCM4nsmY9RZo-Um7ePia408GTIiekT0IHzot8lwacbrAicZLXe_Za_5QLIOIVW3e0OmUmeikZVb0CnWTsJSn6WcDUKNmSzjXJ5rn8EplUxWueFWu4uJihdB3Wpkz3lQGrkuJt0lbyl"
+          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBWHLIPMZk8okq_po_SU4tMFq12VjPTr0EadH_CRZVrG9N1eCak5kxqdcigekqODLvAXoh1LbQGimrSekl5QdCEQDFMWg79i4oWsEFmJ8Cqv0VnHK0XBUVsYE69cHHvpelWbRuCM4nsmY9RZo-Um7ePia408GTIiekT0IHzot8lwacbrAicLXe_Za_5QLIOIVW3e0OmUmeikZVb0CnWTsJSn6WcDUKNmSzjXJ5rn8EplUxWueFWu4uJihdB3Wpkz3lQGrkuJt0lbyl"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-red-900/40 via-transparent to-stone-950/80" />
         <div className="absolute bottom-0 h-1/3 w-full bg-gradient-to-t from-orange-600/20 to-transparent" />
@@ -55,39 +131,79 @@ export default function RegisterPage() {
               </div>
               <div className="flex-grow space-y-4">
                 <div className="space-y-2">
-                  <label className="pixel-text-xs block font-bold uppercase tracking-widest text-orange-500">
-                    Player Name
+                  <label
+                    htmlFor="reg-email"
+                    className="pixel-text-xs block font-bold uppercase tracking-widest text-orange-500"
+                  >
+                    Email
                   </label>
                   <div className="relative">
                     <input
+                      id="reg-email"
                       className="brick-sans voxel-inset w-full border-none bg-stone-950 py-3 px-4 pixel-text-sm font-bold uppercase text-white placeholder:text-stone-700 focus:ring-4 focus:ring-green-500/30"
-                      placeholder="NEW_USERNAME"
-                      type="text"
+                      placeholder="you@example.com"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="pixel-text-xs block font-bold uppercase tracking-widest text-orange-500">
-                    Secret Seed
+                  <label
+                    htmlFor="reg-password"
+                    className="pixel-text-xs block font-bold uppercase tracking-widest text-orange-500"
+                  >
+                    Password
                   </label>
                   <div className="relative">
                     <input
+                      id="reg-password"
                       className="brick-sans voxel-inset w-full border-none bg-stone-950 py-3 px-4 pixel-text-sm font-bold text-white placeholder:text-stone-700 focus:ring-4 focus:ring-green-500/30"
                       placeholder="••••••••"
                       type="password"
+                      autoComplete="new-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="reg-name"
+                    className="pixel-text-xs block font-bold uppercase tracking-widest text-orange-500"
+                  >
+                    Player Name
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="reg-name"
+                      className="brick-sans voxel-inset w-full border-none bg-stone-950 py-3 px-4 pixel-text-sm font-bold uppercase text-white placeholder:text-stone-700 focus:ring-4 focus:ring-green-500/30"
+                      placeholder="NEW_USERNAME"
+                      type="text"
+                      maxLength={24}
+                      autoComplete="nickname"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
                     />
                   </div>
                 </div>
               </div>
             </div>
+            {error ? (
+              <p className="border-2 border-orange-800 bg-stone-900 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-orange-200">
+                {error}
+              </p>
+            ) : null}
             <div className="flex flex-col gap-4">
-              <Link
-                href="/onboarding"
-                onClick={handleJoinArena}
-                className="brick-sans block w-full text-center voxel-shadow-small border-t-4 border-green-400 bg-green-600 py-4 pixel-text-base font-black uppercase tracking-tighter text-stone-950 transition-all duration-75 hover:bg-green-500 active:translate-x-1 active:translate-y-1 active:shadow-none"
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void handleJoinArena()}
+                className="brick-sans block w-full text-center voxel-shadow-small border-t-4 border-green-400 bg-green-600 py-4 pixel-text-base font-black uppercase tracking-tighter text-stone-950 transition-all duration-75 hover:bg-green-500 active:translate-x-1 active:translate-y-1 active:shadow-none disabled:opacity-60"
               >
-                JOIN ARENA
-              </Link>
+                {loading ? "..." : "JOIN ARENA"}
+              </button>
               <div className="flex items-center justify-between px-1">
                 <span className="pixel-text-xs font-bold uppercase tracking-widest text-stone-600">
                   Already spawned?

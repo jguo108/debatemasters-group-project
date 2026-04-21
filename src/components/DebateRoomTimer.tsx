@@ -33,7 +33,9 @@ export function DebateRoomTimer({
 
   useEffect(() => {
     if (phaseCountdownSeconds === undefined) return;
-    setPhaseLeft(phaseCountdownSeconds);
+    queueMicrotask(() => {
+      setPhaseLeft(phaseCountdownSeconds);
+    });
   }, [phaseCountdownSeconds]);
 
   useEffect(() => {

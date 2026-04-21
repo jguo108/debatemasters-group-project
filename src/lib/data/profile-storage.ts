@@ -3,11 +3,14 @@
 import { useSyncExternalStore } from "react";
 import { mockUser } from "@/lib/data/mock/fixtures";
 import type { UserProfile } from "@/lib/data/types";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
 
-const PROFILE_STORAGE_KEY = "debate-profile-v1";
+export const PROFILE_STORAGE_KEY = "debate-profile-v1";
+
 const profileListeners = new Set<() => void>();
 let cachedStorageRaw: string | null = null;
 let cachedProfileSnapshot: UserProfile = mockUser;
+let authListenerRegistered = false;
 
 type ProfilePatch = Pick<UserProfile, "displayName" | "avatarUrl">;
 
@@ -19,10 +22,6 @@ export const MINECRAFT_AVATAR_OPTIONS = [
   { id: "villager", label: "Villager", url: "https://mc-heads.net/avatar/Villager/96" },
   { id: "zombie", label: "Zombie", url: "https://mc-heads.net/avatar/Zombie/96" },
 ] as const;
-
-const MINECRAFT_AVATAR_URLS = new Set(
-  MINECRAFT_AVATAR_OPTIONS.map((avatar) => avatar.url),
-);
 
 function randomMinecraftAvatarUrl(): string {
   const index = Math.floor(Math.random() * MINECRAFT_AVATAR_OPTIONS.length);
@@ -84,10 +83,85 @@ function buildSnapshotFromPatch(patch: ProfilePatch | null): UserProfile {
   };
 }
 
+function notifyProfile(): void {
+  profileListeners.forEach((listener) => listener());
+}
+
+function rowToProfile(
+  row: {
+    id: string;
+    display_name: string;
+    avatar_url: string;
+    level: number;
+    rank_label: string;
+  },
+): UserProfile {
+  return {
+    id: row.id,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    level: row.level,
+    rankLabel: row.rank_label,
+  };
+}
+
+async function refreshProfileFromSupabase(): Promise<void> {
+  if (!isSupabaseConfigured() || typeof window === "undefined") return;
+  const supabase = createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.user) return;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, display_name, avatar_url, level, rank_label")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  if (error || !data) {
+    return;
+  }
+
+  cachedProfileSnapshot = rowToProfile(data);
+  cachedStorageRaw = "__remote__";
+  notifyProfile();
+}
+
+function ensureAuthListener(): void {
+  if (authListenerRegistered || typeof window === "undefined" || !isSupabaseConfigured()) {
+    return;
+  }
+  authListenerRegistered = true;
+  const supabase = createClient();
+  void refreshProfileFromSupabase();
+  supabase.auth.onAuthStateChange((event) => {
+    if (
+      event === "SIGNED_IN" ||
+      event === "TOKEN_REFRESHED" ||
+      event === "USER_UPDATED"
+    ) {
+      void refreshProfileFromSupabase();
+    }
+    if (event === "SIGNED_OUT") {
+      cachedProfileSnapshot = buildSnapshotFromPatch(readStoredPatch());
+      cachedStorageRaw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+      notifyProfile();
+    }
+  });
+}
+
 export function getUserProfileSnapshot(): UserProfile {
   if (typeof window === "undefined") return mockUser;
+  ensureAuthListener();
+  if (cachedStorageRaw === "__remote__") {
+    return cachedProfileSnapshot;
+  }
+
   const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-  if (raw === cachedStorageRaw) return cachedProfileSnapshot;
+  if (raw === cachedStorageRaw && cachedStorageRaw !== null) {
+    return cachedProfileSnapshot;
+  }
 
   cachedStorageRaw = raw;
   const patch = readStoredPatch();
@@ -95,13 +169,43 @@ export function getUserProfileSnapshot(): UserProfile {
   return cachedProfileSnapshot;
 }
 
-export function updateUserProfile(patch: Partial<ProfilePatch>): UserProfile {
+export async function updateUserProfile(
+  patch: Partial<ProfilePatch>,
+): Promise<UserProfile> {
   if (typeof window === "undefined") return mockUser;
+
   const current = getUserProfileSnapshot();
   const nextPatch = sanitizePatch({
     displayName: patch.displayName ?? current.displayName,
     avatarUrl: patch.avatarUrl ?? current.avatarUrl,
   });
+
+  if (isSupabaseConfigured()) {
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.user) {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          display_name: nextPatch.displayName,
+          avatar_url: nextPatch.avatarUrl,
+        })
+        .eq("id", session.user.id);
+      if (!error) {
+        cachedProfileSnapshot = {
+          ...current,
+          ...nextPatch,
+          id: session.user.id,
+        };
+        cachedStorageRaw = "__remote__";
+        notifyProfile();
+        return cachedProfileSnapshot;
+      }
+    }
+  }
+
   const raw = JSON.stringify(nextPatch);
   window.localStorage.setItem(PROFILE_STORAGE_KEY, raw);
   cachedStorageRaw = raw;
@@ -109,12 +213,30 @@ export function updateUserProfile(patch: Partial<ProfilePatch>): UserProfile {
     ...mockUser,
     ...nextPatch,
   };
-  profileListeners.forEach((listener) => listener());
+  notifyProfile();
+  return cachedProfileSnapshot;
+}
+
+function initLocalGuestProfile(): UserProfile {
+  const nextPatch: ProfilePatch = {
+    displayName: mockUser.displayName,
+    avatarUrl: randomMinecraftAvatarUrl(),
+  };
+  const serialized = JSON.stringify(nextPatch);
+  window.localStorage.setItem(PROFILE_STORAGE_KEY, serialized);
+  cachedStorageRaw = serialized;
+  cachedProfileSnapshot = {
+    ...mockUser,
+    ...nextPatch,
+  };
+  notifyProfile();
   return cachedProfileSnapshot;
 }
 
 export function ensureUserProfileInitialized(): UserProfile {
   if (typeof window === "undefined") return mockUser;
+  ensureAuthListener();
+
   const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
   if (raw) {
     const current = getUserProfileSnapshot();
@@ -133,27 +255,30 @@ export function ensureUserProfileInitialized(): UserProfile {
       ...mockUser,
       ...migratedPatch,
     };
-    profileListeners.forEach((listener) => listener());
+    notifyProfile();
     return cachedProfileSnapshot;
   }
 
-  const nextPatch: ProfilePatch = {
-    displayName: mockUser.displayName,
-    avatarUrl: randomMinecraftAvatarUrl(),
-  };
-  const serialized = JSON.stringify(nextPatch);
-  window.localStorage.setItem(PROFILE_STORAGE_KEY, serialized);
-  cachedStorageRaw = serialized;
-  cachedProfileSnapshot = {
-    ...mockUser,
-    ...nextPatch,
-  };
-  profileListeners.forEach((listener) => listener());
-  return cachedProfileSnapshot;
+  if (isSupabaseConfigured()) {
+    void createClient().auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        await refreshProfileFromSupabase();
+      } else if (!window.localStorage.getItem(PROFILE_STORAGE_KEY)) {
+        initLocalGuestProfile();
+      }
+    });
+    if (cachedStorageRaw === "__remote__") {
+      return cachedProfileSnapshot;
+    }
+    return mockUser;
+  }
+
+  return initLocalGuestProfile();
 }
 
 function subscribeToProfile(callback: () => void): () => void {
   profileListeners.add(callback);
+  ensureAuthListener();
   const onStorage = (event: StorageEvent) => {
     if (event.key !== PROFILE_STORAGE_KEY) return;
     callback();

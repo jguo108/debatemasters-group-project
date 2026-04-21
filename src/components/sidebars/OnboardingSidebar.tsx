@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { MaterialIcon } from "../MaterialIcon";
-import { getMockUser } from "@/lib/data/repository";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
 import {
   appendDebateResultToHistory,
   createForfeitResult,
@@ -22,7 +22,6 @@ export function OnboardingSidebar({
 }: {
   leaveGuardSessionMeta?: ForfeitMeta;
 }) {
-  const serverUser = getMockUser();
   const user = useUserProfile();
   const pathname = usePathname();
   const router = useRouter();
@@ -96,7 +95,7 @@ export function OnboardingSidebar({
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden border-2 border-stone-600 bg-stone-950">
                 <img
-                  src={user.avatarUrl || serverUser.avatarUrl}
+                  src={user.avatarUrl}
                   alt={`${user.displayName} avatar`}
                   className="h-full w-full object-cover"
                 />
@@ -113,7 +112,17 @@ export function OnboardingSidebar({
           </Link>
           <Link
             href="/login"
-            onClick={handleGuardedNavClick}
+            onClick={async (e) => {
+              if (guardEnabled && pathname.startsWith("/debate")) {
+                handleGuardedNavClick(e as unknown as MouseEvent<HTMLAnchorElement>);
+                return;
+              }
+              e.preventDefault();
+              if (isSupabaseConfigured()) {
+                await createClient().auth.signOut();
+              }
+              window.location.href = "/login";
+            }}
             className="group mt-4 flex w-full items-center justify-center gap-2 border-2 border-stone-600 bg-stone-950 py-3 transition-colors hover:border-red-800 hover:bg-red-950/80"
           >
             <MaterialIcon
@@ -135,15 +144,18 @@ export function OnboardingSidebar({
           setShowLeaveConfirm(false);
           setPendingExitHref(null);
         }}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!leaveGuardSessionMeta || isLeaving) return;
           setIsLeaving(true);
           const result = createForfeitResult(leaveGuardSessionMeta);
-          appendDebateResultToHistory(result);
+          await appendDebateResultToHistory(result);
           const destination =
             pendingExitHref === "/results"
               ? `/results/${encodeURIComponent(result.id)}`
               : (pendingExitHref ?? "/results");
+          if (destination === "/login" && isSupabaseConfigured()) {
+            await createClient().auth.signOut();
+          }
           router.push(destination);
         }}
       />

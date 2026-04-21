@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { MaterialIcon } from "@/components/MaterialIcon";
 import {
   removeDebateResultFromHistory,
@@ -27,12 +27,9 @@ export default function ResultsPage() {
     id: string;
     topicTitle: string;
   } | null>(null);
-  const visibleHistory = history.slice(0, visibleCount);
-  const hasMore = visibleCount < history.length;
-
-  useEffect(() => {
-    setVisibleCount((prev) => Math.min(Math.max(prev, 4), history.length || 4));
-  }, [history.length]);
+  const effectiveCount = Math.min(visibleCount, history.length);
+  const visibleHistory = history.slice(0, effectiveCount);
+  const hasMore = effectiveCount < history.length;
 
   return (
     <div className="relative z-20 mx-auto max-w-3xl px-6 py-10 text-pretty md:px-12 md:py-14">
@@ -144,8 +141,10 @@ export default function ResultsPage() {
               <button
                 type="button"
                 onClick={() => {
-                  removeDebateResultFromHistory(pendingDelete.id);
-                  setPendingDelete(null);
+                  void (async () => {
+                    await removeDebateResultFromHistory(pendingDelete.id);
+                    setPendingDelete(null);
+                  })();
                 }}
                 className="border-b-4 border-red-950 bg-red-700 px-4 py-2 text-xs font-black uppercase tracking-wide text-white transition-all hover:bg-red-600 active:translate-y-0.5 active:border-b-2"
               >
