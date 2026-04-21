@@ -1,14 +1,22 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NetherSidebarShell } from "@/components/layout/NetherSidebarShell";
 import { OnboardingSidebar } from "@/components/sidebars/OnboardingSidebar";
 import { MaterialIcon } from "@/components/MaterialIcon";
 import type { AgeBand } from "@/lib/data/types";
+import {
+  getAgeBandPreference,
+  setAgeBandPreference,
+} from "@/lib/data/profile-storage";
 
 export default function OnboardingPage() {
-  const [age, setAge] = useState<AgeBand>("10-14");
+  const [age, setAge] = useState<AgeBand>(() => getAgeBandPreference());
+
+  useEffect(() => {
+    setAgeBandPreference(age);
+  }, [age]);
 
   return (
     <div className="theme-nether-dark selection:bg-[#58B13E] selection:text-black relative min-h-screen overflow-x-hidden bg-[#1A0806] font-[family-name:var(--font-inter)] text-white nether-bg-onboarding">

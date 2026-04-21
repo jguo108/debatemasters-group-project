@@ -1,13 +1,23 @@
 ﻿import { NextResponse } from "next/server";
-import type { DebateTranscriptEntry } from "@/lib/data/types";
+import type { AgeBand, DebateTranscriptEntry } from "@/lib/data/types";
 import { generateOpponentReply } from "@/lib/llm/tasks";
 
 type OpponentReplyBody = {
   topicTitle?: unknown;
   opponentName?: unknown;
   userRole?: unknown;
+  ageBand?: unknown;
   transcript?: unknown;
 };
+
+function normalizeAgeBand(value: unknown): AgeBand {
+  return value === "under10" ||
+    value === "10-14" ||
+    value === "15-18" ||
+    value === "18+"
+    ? value
+    : "10-14";
+}
 
 function normalizeTranscript(value: unknown): DebateTranscriptEntry[] {
   if (!Array.isArray(value)) return [];
@@ -34,6 +44,7 @@ export async function POST(request: Request) {
     const opponentName =
       typeof body.opponentName === "string" ? body.opponentName.trim() : "Opponent";
     const userRole = body.userRole === "con" ? "con" : "pro";
+    const ageBand = normalizeAgeBand(body.ageBand);
     const transcript = normalizeTranscript(body.transcript);
 
     if (!topicTitle) {
@@ -47,6 +58,7 @@ export async function POST(request: Request) {
       topicTitle,
       opponentName,
       userRole,
+      ageBand,
       transcript,
     });
 

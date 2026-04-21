@@ -15,6 +15,7 @@ import {
   wsdaRoundTransitionMessage,
 } from "@/lib/debate/wsda-schedule";
 import {
+  getAgeBandPreference,
   pickMinecraftAvatarBySeed,
   useUserProfile,
 } from "@/lib/data/profile-storage";
@@ -183,6 +184,7 @@ export function DebateChatPanel({
             topicTitle: topicTitle?.trim() || phaseLabel,
             opponentName,
             userRole,
+            ageBand: getAgeBandPreference(),
             transcript,
           }),
         });
@@ -668,7 +670,7 @@ export function DebateChatPanel({
                       >
                         {row.replySource === "fallback"
                           ? "Fallback Reply"
-                          : "DeepSeek Reply"}
+                          : "AI Reply"}
                       </span>
                     ) : null}
                     <p
@@ -916,7 +918,7 @@ export function DebateChatPanel({
           </p>
         ) : null}
         <form
-          className={`flex items-center gap-3 border-4 border-black bg-stone-900 p-3 shadow-[inset_4px_4px_0px_0px_rgba(0,0,0,0.5)] ${
+          className={`flex items-end gap-3 border-4 border-black bg-stone-900 p-3 shadow-[inset_4px_4px_0px_0px_rgba(0,0,0,0.5)] ${
             inputLocked ? "opacity-75" : ""
           }`}
           onSubmit={(e) => {
@@ -925,19 +927,25 @@ export function DebateChatPanel({
           }}
         >
           <span className="ml-2 font-bold text-orange-900">&gt;</span>
-          <input
-            className="pixel-text-xs flex-1 border-none bg-transparent text-orange-500 placeholder:text-red-900 focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
+          <textarea
+            className="pixel-text-xs max-h-36 min-h-[2.5rem] flex-1 resize-none border-none bg-transparent leading-relaxed text-orange-500 placeholder:text-red-900 focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
             placeholder={
               inputLocked
                 ? footerHint ?? "Input locked"
                 : "Toss argument..."
             }
-            type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                postMessage();
+              }
+            }}
             aria-label="Your argument"
             autoComplete="off"
             disabled={inputLocked}
+            rows={1}
           />
           <div className="flex shrink-0 gap-2">
             <button

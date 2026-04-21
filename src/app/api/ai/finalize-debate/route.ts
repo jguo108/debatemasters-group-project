@@ -1,6 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 import { buildLocalAiJudgedResult } from "@/lib/data/ai-results";
-import type { DebateResult, DebateTranscriptEntry } from "@/lib/data/types";
+import type { AgeBand, DebateResult, DebateTranscriptEntry } from "@/lib/data/types";
 import { judgeDebateAndFeedback } from "@/lib/llm/tasks";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/browser-client";
@@ -11,8 +11,18 @@ type FinalizeDebateBody = {
   userRole?: unknown;
   debateFormat?: unknown;
   arenaRoomId?: unknown;
+  ageBand?: unknown;
   transcript?: unknown;
 };
+
+function normalizeAgeBand(value: unknown): AgeBand {
+  return value === "under10" ||
+    value === "10-14" ||
+    value === "15-18" ||
+    value === "18+"
+    ? value
+    : "10-14";
+}
 
 function normalizeTranscript(value: unknown): DebateTranscriptEntry[] {
   if (!Array.isArray(value)) return [];
@@ -87,6 +97,7 @@ export async function POST(request: Request) {
     const topicTitle = typeof body.topicTitle === "string" ? body.topicTitle.trim() : "";
     const userRole = body.userRole === "con" ? "con" : "pro";
     const debateFormat = body.debateFormat === "wsda" ? "wsda" : undefined;
+    const ageBand = normalizeAgeBand(body.ageBand);
     const arenaRoomId =
       typeof body.arenaRoomId === "string" ? body.arenaRoomId.trim() : "";
     const transcript = normalizeTranscript(body.transcript);
@@ -107,6 +118,8 @@ export async function POST(request: Request) {
     const judgement = await judgeDebateAndFeedback({
       topicTitle,
       debateFormat,
+      userRole,
+      ageBand,
       transcript,
     });
 

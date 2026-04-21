@@ -5,6 +5,7 @@ import {
   readActiveDebateTranscript,
   type ForfeitMeta,
 } from "@/lib/data/history-storage";
+import { getAgeBandPreference } from "@/lib/data/profile-storage";
 import type { DebateResult } from "@/lib/data/types";
 
 type FinalizeDebateOutcome =
@@ -31,6 +32,7 @@ export async function finalizeDebateWithAi(
       userRole: sessionMeta.userRole,
       debateFormat: sessionMeta.debateFormat,
       arenaRoomId: sessionMeta.arenaRoomId,
+      ageBand: getAgeBandPreference(),
       transcript,
     }),
   });

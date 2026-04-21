@@ -2,15 +2,37 @@
 
 import { useSyncExternalStore } from "react";
 import { mockUser } from "@/lib/data/mock/fixtures";
-import type { UserProfile } from "@/lib/data/types";
+import type { AgeBand, UserProfile } from "@/lib/data/types";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
 
 export const PROFILE_STORAGE_KEY = "debate-profile-v1";
+export const AGE_BAND_STORAGE_KEY = "debate-age-band-v1";
+const DEFAULT_AGE_BAND: AgeBand = "10-14";
 
 const profileListeners = new Set<() => void>();
 let cachedStorageRaw: string | null = null;
 let cachedProfileSnapshot: UserProfile = mockUser;
 let authListenerRegistered = false;
+
+function normalizeAgeBand(value: unknown): AgeBand {
+  return value === "under10" ||
+    value === "10-14" ||
+    value === "15-18" ||
+    value === "18+"
+    ? value
+    : DEFAULT_AGE_BAND;
+}
+
+export function getAgeBandPreference(): AgeBand {
+  if (typeof window === "undefined") return DEFAULT_AGE_BAND;
+  const raw = window.localStorage.getItem(AGE_BAND_STORAGE_KEY);
+  return normalizeAgeBand(raw);
+}
+
+export function setAgeBandPreference(ageBand: AgeBand): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(AGE_BAND_STORAGE_KEY, ageBand);
+}
 
 type ProfilePatch = Pick<UserProfile, "displayName" | "avatarUrl">;
 

@@ -35,8 +35,6 @@ function ResultHeadline({ headline }: { headline: string }) {
 }
 
 export function DebateResultDetail({ r }: { r: DebateResult }) {
-  const xpPct = Math.round((r.xpCurrent / r.xpToNext) * 100);
-
   return (
     <div className={`relative z-20 mx-auto max-w-5xl p-8 md:p-12 ${sans}`}>
       <div className="mb-12 text-center">
@@ -47,28 +45,6 @@ export function DebateResultDetail({ r }: { r: DebateResult }) {
         <p className="mt-3 text-sm font-medium uppercase tracking-wide text-stone-400">
           {r.topicTitle}
         </p>
-      </div>
-
-      <div className="mb-16">
-        <div className="mb-2 flex items-end justify-between">
-          <span className="text-lg font-bold uppercase tracking-wide text-primary-fixed md:text-xl">
-            Level {r.level}
-          </span>
-          <span className="text-sm font-semibold tabular-nums text-stone-300">
-            {r.xpCurrent.toLocaleString()} / {r.xpToNext.toLocaleString()} XP
-          </span>
-        </div>
-        <div className="pixel-shadow-results relative h-10 overflow-hidden border-4 border-stone-800 bg-black">
-          <div
-            className="h-full border-r-4 border-primary bg-primary-fixed shadow-[inset_0_4px_0_rgba(255,255,255,0.4)]"
-            style={{ width: `${xpPct}%` }}
-          />
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <span className="text-[11px] font-bold tracking-widest text-white">
-              +{r.xpEarned} XP earned
-            </span>
-          </div>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-10 md:grid-cols-12">
@@ -99,6 +75,9 @@ export function DebateResultDetail({ r }: { r: DebateResult }) {
                   </span>
                   <span className="text-3xl font-extrabold tabular-nums text-stone-900">
                     {r.scores.clarity}
+                    <span className="ml-1 text-base font-bold text-stone-700">
+                      /5
+                    </span>
                   </span>
                 </div>
                 <div className="border-2 border-tertiary bg-tertiary-fixed-dim/90 p-4">
@@ -107,6 +86,9 @@ export function DebateResultDetail({ r }: { r: DebateResult }) {
                   </span>
                   <span className="text-3xl font-extrabold tabular-nums text-stone-900">
                     {r.scores.evidence}
+                    <span className="ml-1 text-base font-bold text-stone-700">
+                      /5
+                    </span>
                   </span>
                 </div>
               </div>
