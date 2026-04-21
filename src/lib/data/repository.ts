@@ -40,6 +40,16 @@ function parseRequestedRole(
   return undefined;
 }
 
+function parseRequestedSoloDurationSeconds(
+  durationMinutes: string | null | undefined,
+): number | undefined {
+  const value = Number.parseInt(durationMinutes?.trim() ?? "", 10);
+  if (value === 3 || value === 5 || value === 10 || value === 15) {
+    return value * 60;
+  }
+  return undefined;
+}
+
 function buildWsdaSession(
   topicTitle: string,
   preferredRole?: "pro" | "con",
@@ -106,11 +116,15 @@ export function getDebateSessionForTopic(
   customTitle: string | null | undefined,
   format: string | null | undefined,
   requestedRole?: string | null | undefined,
+  requestedDurationMinutes?: string | null | undefined,
 ): DebateSession {
   const base: DebateSession = { ...mockDebateSession };
   const id = topicId?.trim();
   const isWsda = format?.trim().toLowerCase() === "wsda";
   const selectedRole = parseRequestedRole(requestedRole);
+  const selectedSoloDurationSeconds = parseRequestedSoloDurationSeconds(
+    requestedDurationMinutes,
+  );
 
   if (id === "custom") {
     const t = customTitle?.trim();
@@ -121,17 +135,35 @@ export function getDebateSessionForTopic(
     return {
       ...base,
       topicTitle: title,
+      timerMmSs: selectedSoloDurationSeconds
+        ? formatMmSs(selectedSoloDurationSeconds)
+        : base.timerMmSs,
+      soloDurationSeconds: selectedSoloDurationSeconds,
       userRole: selectedRole ?? base.userRole,
     };
   }
 
   if (!id) {
-    return { ...base, userRole: selectedRole ?? base.userRole };
+    return {
+      ...base,
+      timerMmSs: selectedSoloDurationSeconds
+        ? formatMmSs(selectedSoloDurationSeconds)
+        : base.timerMmSs,
+      soloDurationSeconds: selectedSoloDurationSeconds,
+      userRole: selectedRole ?? base.userRole,
+    };
   }
 
   const topic = mockTopics.find((t) => t.id === id);
   if (!topic) {
-    return { ...base, userRole: selectedRole ?? base.userRole };
+    return {
+      ...base,
+      timerMmSs: selectedSoloDurationSeconds
+        ? formatMmSs(selectedSoloDurationSeconds)
+        : base.timerMmSs,
+      soloDurationSeconds: selectedSoloDurationSeconds,
+      userRole: selectedRole ?? base.userRole,
+    };
   }
 
   if (isWsda) {
@@ -141,6 +173,10 @@ export function getDebateSessionForTopic(
   return {
     ...base,
     topicTitle: topic.description,
+    timerMmSs: selectedSoloDurationSeconds
+      ? formatMmSs(selectedSoloDurationSeconds)
+      : base.timerMmSs,
+    soloDurationSeconds: selectedSoloDurationSeconds,
     userRole: selectedRole ?? base.userRole,
   };
 }

@@ -58,6 +58,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
       firstParam(sp.title),
       formatParam,
       roleParam,
+      firstParam(sp.duration),
     );
   }
   const isWsda = session.debateFormat === "wsda";
@@ -281,6 +282,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                       <DebateRoomTimer
                         isSoloAi={isSoloAiDebate}
                         staticMmSs={session.timerMmSs}
+                        soloTotalSeconds={session.soloDurationSeconds}
                         compact
                       />
                     </div>

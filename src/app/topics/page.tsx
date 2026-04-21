@@ -21,6 +21,10 @@ function shadowFor(accent: TopicCategory["accent"]) {
 export default function TopicsPage() {
   const topics = getMockTopics();
   const [soloRole, setSoloRole] = useState<"pro" | "con">("pro");
+  const [soloDurationMinutes, setSoloDurationMinutes] = useState<
+    3 | 5 | 10 | 15
+  >(5);
+  const durationOptions: Array<3 | 5 | 10 | 15> = [3, 5, 10, 15];
 
   return (
     <div className="bg-background font-[family-name:var(--font-inter)] text-on-background selection:bg-primary selection:text-white">
@@ -48,32 +52,60 @@ export default function TopicsPage() {
               </div>
             </footer>
             <section className="mb-8 border-l-8 border-primary-fixed bg-stone-900/70 p-5">
-              <p className="mb-3 font-headline-pixel text-[8px] font-bold uppercase tracking-widest text-stone-300">
-                Solo Path Side
-              </p>
-              <div className="inline-flex border-4 border-black bg-stone-950 p-1">
-                <button
-                  type="button"
-                  onClick={() => setSoloRole("pro")}
-                  className={`px-4 py-2 font-headline-pixel text-[10px] font-black uppercase transition-all ${
-                    soloRole === "pro"
-                      ? "bg-primary text-white shadow-[0px_3px_0px_0px_#085300]"
-                      : "bg-stone-800 text-stone-300 hover:bg-stone-700"
-                  }`}
-                >
-                  Pro
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSoloRole("con")}
-                  className={`px-4 py-2 font-headline-pixel text-[10px] font-black uppercase transition-all ${
-                    soloRole === "con"
-                      ? "bg-tertiary text-white shadow-[0px_3px_0px_0px_#00497d]"
-                      : "bg-stone-800 text-stone-300 hover:bg-stone-700"
-                  }`}
-                >
-                  Con
-                </button>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:items-start">
+                <div>
+                  <p className="mb-3 font-headline-pixel text-[8px] font-bold uppercase tracking-widest text-stone-300">
+                    Side
+                  </p>
+                  <div className="inline-flex border-4 border-black bg-stone-950 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setSoloRole("pro")}
+                      className={`px-4 py-2 font-headline-pixel text-[10px] font-black uppercase transition-all ${
+                        soloRole === "pro"
+                          ? "bg-primary text-white shadow-[0px_3px_0px_0px_#085300]"
+                          : "bg-stone-800 text-stone-300 hover:bg-stone-700"
+                      }`}
+                    >
+                      Pro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSoloRole("con")}
+                      className={`px-4 py-2 font-headline-pixel text-[10px] font-black uppercase transition-all ${
+                        soloRole === "con"
+                          ? "bg-tertiary text-white shadow-[0px_3px_0px_0px_#00497d]"
+                          : "bg-stone-800 text-stone-300 hover:bg-stone-700"
+                      }`}
+                    >
+                      Con
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-3 font-headline-pixel text-[8px] font-bold uppercase tracking-widest text-stone-300">
+                    Time
+                  </p>
+                  <div className="inline-flex flex-wrap border-4 border-black bg-stone-950 p-1">
+                    {durationOptions.map((minutes) => {
+                      const selected = soloDurationMinutes === minutes;
+                      return (
+                        <button
+                          key={minutes}
+                          type="button"
+                          onClick={() => setSoloDurationMinutes(minutes)}
+                          className={`px-4 py-2 font-headline-pixel text-[10px] font-black uppercase transition-all ${
+                            selected
+                              ? "bg-primary text-white shadow-[0px_3px_0px_0px_#085300]"
+                              : "bg-stone-800 text-stone-300 hover:bg-stone-700"
+                          }`}
+                        >
+                          {minutes} mins
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </section>
             <div className="mb-16 grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
@@ -131,14 +163,14 @@ export default function TopicsPage() {
                 const btn =
                   t.accent === "tertiary" ? (
                     <Link
-                      href={`/debate?topic=${encodeURIComponent(t.id)}&role=${soloRole}`}
+                      href={`/debate?topic=${encodeURIComponent(t.id)}&role=${soloRole}&duration=${soloDurationMinutes}`}
                       className={`relative flex items-center justify-center gap-2 bg-tertiary py-3 px-6 font-headline-pixel font-black text-white transition-all hover:translate-y-[2px] active:translate-y-[4px] active:shadow-none ${shadowFor("tertiary")} text-[10px]`}
                     >
                       GO <TopicIcon name="play_arrow" className="text-sm" />
                     </Link>
                   ) : (
                     <Link
-                      href={`/debate?topic=${encodeURIComponent(t.id)}&role=${soloRole}`}
+                      href={`/debate?topic=${encodeURIComponent(t.id)}&role=${soloRole}&duration=${soloDurationMinutes}`}
                       className={`relative flex items-center justify-center gap-2 bg-primary py-3 px-6 font-headline-pixel font-black text-white transition-all hover:translate-y-[2px] active:translate-y-[4px] active:shadow-none ${shadowFor("primary")} ${
                         t.wide ? "py-4 px-12 text-sm" : "text-[10px]"
                       }`}
@@ -208,6 +240,11 @@ export default function TopicsPage() {
                 >
                   <input type="hidden" name="topic" value="custom" />
                   <input type="hidden" name="role" value={soloRole} />
+                  <input
+                    type="hidden"
+                    name="duration"
+                    value={soloDurationMinutes}
+                  />
                   <div className="group flex-1">
                     <input
                       name="title"

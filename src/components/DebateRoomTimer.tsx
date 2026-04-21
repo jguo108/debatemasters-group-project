@@ -13,12 +13,15 @@ function formatMmSs(totalSeconds: number): string {
 export function DebateRoomTimer({
   isSoloAi,
   staticMmSs,
+  soloTotalSeconds,
   phaseCountdownSeconds,
   controlledSeconds,
   compact,
 }: {
   isSoloAi: boolean;
   staticMmSs: string;
+  /** Solo-only countdown length; defaults to 15 minutes. */
+  soloTotalSeconds?: number;
   /** WSDA (and similar): countdown for the active speech segment. */
   phaseCountdownSeconds?: number;
   /** Parent-driven countdown (e.g. WSDA phase engine). */
@@ -26,7 +29,8 @@ export function DebateRoomTimer({
   /** Tighter padding for header / inline use. */
   compact?: boolean;
 }) {
-  const [secondsLeft, setSecondsLeft] = useState(SOLO_TOTAL_SECONDS);
+  const soloStartSeconds = soloTotalSeconds ?? SOLO_TOTAL_SECONDS;
+  const [secondsLeft, setSecondsLeft] = useState(soloStartSeconds);
   const [phaseLeft, setPhaseLeft] = useState(
     () => phaseCountdownSeconds ?? 0,
   );

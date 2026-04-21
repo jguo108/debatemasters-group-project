@@ -27,6 +27,8 @@ export interface DebateSession {
   locationLabel: string;
   phaseLabel: string;
   timerMmSs: string;
+  /** Solo-only total debate time in seconds (3/5/10/15 mins). */
+  soloDurationSeconds?: number;
   opponentName: string;
   userRole: "pro" | "con";
   /** When set, debate room uses WSDA segment timing instead of solo AI clock. */
