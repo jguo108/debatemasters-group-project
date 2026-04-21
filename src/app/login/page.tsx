@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MaterialIcon } from "@/components/MaterialIcon";
 import { migrateLocalDataToSupabaseIfNeeded } from "@/lib/data/local-migration";
 import { ensureUserProfileInitialized } from "@/lib/data/profile-storage";
@@ -10,10 +10,19 @@ import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-clien
 
 export default function LoginPage() {
   const router = useRouter();
+  const [postLoginPath, setPostLoginPath] = useState("/onboarding");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("redirect");
+    if (raw && raw.startsWith("/") && !raw.startsWith("//")) {
+      setPostLoginPath(raw);
+    }
+  }, []);
 
   async function handleLogin() {
     setError(null);
@@ -38,7 +47,7 @@ export default function LoginPage() {
       }
       ensureUserProfileInitialized();
       await migrateLocalDataToSupabaseIfNeeded();
-      router.push("/onboarding");
+      router.push(postLoginPath);
       router.refresh();
     } finally {
       setLoading(false);

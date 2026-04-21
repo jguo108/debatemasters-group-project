@@ -2,11 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  appendDebateResultToHistory,
-  createForfeitResult,
-  type ForfeitMeta,
-} from "@/lib/data/history-storage";
+import type { ForfeitMeta } from "@/lib/data/history-storage";
+import { recordDebaterExit } from "@/lib/data/debater-exit";
 import { DebateEndConfirmModal } from "@/components/debate/DebateEndConfirmModal";
 
 export function ForfeitEndButton({
@@ -51,9 +48,16 @@ export function ForfeitEndButton({
         onConfirm={async () => {
           if (isEnding) return;
           setIsEnding(true);
-          const result = createForfeitResult(sessionMeta);
-          await appendDebateResultToHistory(result);
-          router.push(`/results/${encodeURIComponent(result.id)}`);
+          try {
+            const outcome = await recordDebaterExit(sessionMeta);
+            if (outcome.type === "already_self") {
+              router.push("/results");
+              return;
+            }
+            router.push(`/results/${encodeURIComponent(outcome.resultId)}`);
+          } finally {
+            setIsEnding(false);
+          }
         }}
       />
     </>

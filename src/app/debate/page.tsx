@@ -14,7 +14,10 @@ import {
   formatMmSs,
   wsdaActiveSpeakerLabel,
 } from "@/lib/debate/wsda-schedule";
+import { loadArenaDebateSession } from "@/lib/data/arena-room-server";
 import { getDebateSessionForTopic } from "@/lib/data/repository";
+import type { DebateSession } from "@/lib/data/types";
+import { redirect } from "next/navigation";
 
 function firstParam(
   v: string | string[] | undefined,
@@ -29,13 +32,32 @@ type DebatePageProps = {
 
 export default async function DebatePage({ searchParams }: DebatePageProps) {
   const sp = await searchParams;
+  const roomParam = firstParam(sp.room);
   const topicParam = firstParam(sp.topic);
   const formatParam = firstParam(sp.format);
-  const session = getDebateSessionForTopic(
-    topicParam,
-    firstParam(sp.title),
-    formatParam,
-  );
+
+  let session: DebateSession;
+  if (roomParam?.trim()) {
+    const rid = roomParam.trim();
+    const arena = await loadArenaDebateSession(rid);
+    if (!arena.ok) {
+      if (arena.reason === "unauthenticated") {
+        redirect(
+          `/login?redirect=${encodeURIComponent(
+            `/debate?room=${encodeURIComponent(rid)}&format=wsda&topic=custom`,
+          )}`,
+        );
+      }
+      redirect("/topics");
+    }
+    session = arena.session;
+  } else {
+    session = getDebateSessionForTopic(
+      topicParam,
+      firstParam(sp.title),
+      formatParam,
+    );
+  }
   const isWsda = session.debateFormat === "wsda";
   const isSoloAiDebate = Boolean(topicParam?.trim()) && !isWsda;
 
@@ -51,6 +73,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
               opponentName: session.opponentName,
               userRole: session.userRole,
               debateFormat: session.debateFormat,
+              arenaRoomId: session.arenaRoomId,
             }}
           />
         }
@@ -138,6 +161,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                   opponentName: session.opponentName,
                   userRole: session.userRole,
                   debateFormat: session.debateFormat,
+                  arenaRoomId: session.arenaRoomId,
                 }}
                 className="inline-flex w-full items-center justify-center border-b-4 border-orange-900 bg-orange-600 px-4 py-3 text-white pixel-text-xs font-black uppercase shadow-[4px_4px_0px_0px_#451a03] transition-all hover:bg-orange-500 active:translate-y-1 active:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
                 ariaLabel="End debate now"
@@ -326,6 +350,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                       opponentName: session.opponentName,
                       userRole: session.userRole,
                       debateFormat: session.debateFormat,
+                      arenaRoomId: session.arenaRoomId,
                     }}
                     className="inline-flex w-full items-center justify-center border-b-4 border-orange-900 bg-orange-600 px-4 py-3 text-white pixel-text-xs font-black uppercase shadow-[4px_4px_0px_0px_#451a03] transition-all hover:bg-orange-500 active:translate-y-1 active:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
                     ariaLabel="End debate now"

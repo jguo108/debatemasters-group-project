@@ -1,18 +1,35 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { writeActiveDebateTranscript } from "@/lib/data/history-storage";
 import { pickConSimLine } from "@/lib/debate/con-sim-lines";
 import {
-  formatMmSs,
   proConstructiveOpening,
   wsdaRoundChatCopy,
+  wsdaRoundTransitionMessage,
 } from "@/lib/debate/wsda-schedule";
 import {
   pickMinecraftAvatarBySeed,
   useUserProfile,
 } from "@/lib/data/profile-storage";
 import type { DebateTranscriptEntry } from "@/lib/data/types";
+import {
+  useArenaRoomMessages,
+  type ArenaRoomMessageRow,
+} from "@/lib/debate/use-arena-room-messages";
+import { isSupabaseConfigured } from "@/lib/supabase/browser-client";
+
+type WsdaChatRow =
+  | { kind: "system"; key: string; at: string; text: string }
+  | { kind: "arena"; msg: ArenaRoomMessageRow }
+  | { kind: "local"; id: number; text: string; postedAt: string }
+  | { kind: "opening"; entry: DebateTranscriptEntry };
 
 type DebateChatPanelProps = {
   sessionId: string;
@@ -33,6 +50,11 @@ type DebateChatPanelProps = {
   roundComplete?: boolean;
   /** When user is Pro and Con is speaking: simulate Con messages in chat. */
   simulateConOpponent?: boolean;
+  /** Live arena: sync typed messages to Supabase for the other player. */
+  arenaRoomId?: string;
+  /** Live arena: from Supabase `profiles` (overrides local profile + seeded opponent head). */
+  selfAvatarUrl?: string;
+  opponentAvatarUrl?: string;
 };
 
 export function DebateChatPanel({
@@ -48,10 +70,29 @@ export function DebateChatPanel({
   secondsLeft = 0,
   roundComplete = false,
   simulateConOpponent = false,
+  arenaRoomId,
+  selfAvatarUrl: selfAvatarUrlOverride,
+  opponentAvatarUrl: opponentAvatarUrlOverride,
 }: DebateChatPanelProps) {
   const user = useUserProfile();
+  const {
+    messages: arenaMessages,
+    currentUserId: arenaUserId,
+    send: arenaSend,
+  } = useArenaRoomMessages(
+    arenaRoomId && isSupabaseConfigured() ? arenaRoomId : undefined,
+  );
+  const arenaTranscriptRef = useRef<Set<string>>(new Set());
   const [draft, setDraft] = useState("");
-  const [userPosts, setUserPosts] = useState<{ id: number; text: string }[]>([]);
+  const [userPosts, setUserPosts] = useState<
+    { id: number; text: string; postedAt: string }[]
+  >([]);
+  /** System lines must live in React state so the chat re-renders (ref-only transcript did not). */
+  const [wsdaSystemFeed, setWsdaSystemFeed] = useState<DebateTranscriptEntry[]>([]);
+  /** Pro constructive line (offline WSDA) — merged into the local timeline by `at` order. */
+  const [wsdaOpeningLine, setWsdaOpeningLine] = useState<DebateTranscriptEntry | null>(
+    null,
+  );
   const [simConPosts, setSimConPosts] = useState<
     { id: number; text: string; phaseIndex: number }[]
   >([]);
@@ -60,7 +101,9 @@ export function DebateChatPanel({
   const simPostIdRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initializedTranscriptRef = useRef(false);
-  const announcedPhaseIndicesRef = useRef<Set<number>>(new Set());
+  const prevWsdaPhaseRef = useRef<number | null>(null);
+  const transitionEmittedRef = useRef<Set<string>>(new Set());
+  const debateEndAnnouncedRef = useRef(false);
 
   const isWsda =
     debateFormat === "wsda" &&
@@ -71,10 +114,12 @@ export function DebateChatPanel({
     ? proConstructiveOpening(topicTitle.trim())
     : "";
   const youDisplayName = user.displayName || "Master Builder";
-  const yourAvatarUrl = user.avatarUrl;
+  const yourAvatarUrl = selfAvatarUrlOverride ?? user.avatarUrl;
   const opponentAvatarUrl = useMemo(
-    () => pickMinecraftAvatarBySeed(opponentName || "opponent"),
-    [opponentName],
+    () =>
+      opponentAvatarUrlOverride ??
+      pickMinecraftAvatarBySeed(opponentName || "opponent"),
+    [opponentAvatarUrlOverride, opponentName],
   );
 
   const setTranscriptEntries = useCallback(
@@ -89,8 +134,11 @@ export function DebateChatPanel({
     (entry: DebateTranscriptEntry) => {
       const next = [...transcriptRef.current, entry];
       setTranscriptEntries(next);
+      if (debateFormat === "wsda" && entry.speaker === "System") {
+        setWsdaSystemFeed((prev) => [...prev, entry]);
+      }
     },
-    [setTranscriptEntries],
+    [debateFormat, setTranscriptEntries],
   );
 
   useEffect(() => {
@@ -99,11 +147,13 @@ export function DebateChatPanel({
     const now = new Date().toISOString();
 
     if (isWsda) {
+      const t0 = Date.now();
+      const at = (i: number) => new Date(t0 + i).toISOString();
       const initial: DebateTranscriptEntry[] = [
         {
           speaker: "System",
           text: `Debate opened: ${topicTitle?.trim() || "WSDA round"}`,
-          at: now,
+          at: at(0),
         },
       ];
       const copy = wsdaRoundChatCopy(phaseIndex);
@@ -111,20 +161,22 @@ export function DebateChatPanel({
         initial.push({
           speaker: "System",
           text: `Session ${copy.roundNumber}/${copy.totalRounds}: ${copy.headline}. ${copy.purpose} ${copy.instruction}`,
-          at: now,
+          at: at(1),
         });
-        announcedPhaseIndicesRef.current.add(phaseIndex);
       }
-      if (phaseIndex === 0 && proSpeech) {
+      if (phaseIndex === 0 && proSpeech && !arenaRoomId) {
         const openingSpeaker =
           userRole === "pro" ? "You (Pro)" : `${opponentName} (Pro)`;
-        initial.push({
+        const opening: DebateTranscriptEntry = {
           speaker: openingSpeaker,
           text: proSpeech,
-          at: now,
-        });
+          at: at(2),
+        };
+        initial.push(opening);
+        setWsdaOpeningLine(opening);
       }
       setTranscriptEntries(initial);
+      setWsdaSystemFeed(initial.filter((e) => e.speaker === "System"));
       return;
     }
 
@@ -153,6 +205,7 @@ export function DebateChatPanel({
   }, [
     appendTranscriptEntry,
     isWsda,
+    arenaRoomId,
     opponentName,
     phaseIndex,
     phaseLabel,
@@ -165,19 +218,35 @@ export function DebateChatPanel({
 
   useEffect(() => {
     if (!isWsda) return;
-    if (announcedPhaseIndicesRef.current.has(phaseIndex)) return;
-    const copy = wsdaRoundChatCopy(phaseIndex);
-    if (!copy) return;
-    announcedPhaseIndicesRef.current.add(phaseIndex);
+    const prev = prevWsdaPhaseRef.current;
+    prevWsdaPhaseRef.current = phaseIndex;
+    if (prev === null) {
+      return;
+    }
+    if (phaseIndex <= prev) {
+      return;
+    }
+    const key = `${prev}->${phaseIndex}`;
+    if (transitionEmittedRef.current.has(key)) {
+      return;
+    }
+    const text = wsdaRoundTransitionMessage(prev);
+    if (!text) {
+      return;
+    }
+    transitionEmittedRef.current.add(key);
     appendTranscriptEntry({
       speaker: "System",
-      text: `Session ${copy.roundNumber}/${copy.totalRounds}: ${copy.headline}. ${copy.purpose} ${copy.instruction}`,
+      text,
       at: new Date().toISOString(),
     });
   }, [appendTranscriptEntry, isWsda, phaseIndex]);
 
   useEffect(() => {
-    if (!roundComplete || !isWsda) return;
+    if (!roundComplete || !isWsda || debateEndAnnouncedRef.current) {
+      return;
+    }
+    debateEndAnnouncedRef.current = true;
     appendTranscriptEntry({
       speaker: "System",
       text: "Debate complete. All WSDA sessions finished.",
@@ -215,6 +284,84 @@ export function DebateChatPanel({
     (post) => post.phaseIndex === phaseIndex,
   );
 
+  const wsdaArenaTimeline = useMemo((): WsdaChatRow[] => {
+    if (!isWsda || !arenaRoomId) return [];
+    const rows: WsdaChatRow[] = [];
+    let sk = 0;
+    for (const e of wsdaSystemFeed) {
+      if (e.speaker !== "System") continue;
+      rows.push({
+        kind: "system",
+        key: `sys-${sk++}-${e.at}-${e.text.slice(0, 32)}`,
+        at: e.at,
+        text: e.text,
+      });
+    }
+    for (const m of arenaMessages) {
+      rows.push({ kind: "arena", msg: m });
+    }
+    const rowTime = (r: WsdaChatRow) => {
+      if (r.kind === "system") return +new Date(r.at);
+      if (r.kind === "arena") return +new Date(r.msg.created_at);
+      return 0;
+    };
+    rows.sort((a, b) => {
+      const ta = rowTime(a);
+      const tb = rowTime(b);
+      if (ta !== tb) return ta - tb;
+      return a.kind === "system" ? -1 : 1;
+    });
+    return rows;
+  }, [isWsda, arenaRoomId, wsdaSystemFeed, arenaMessages]);
+
+  const wsdaLocalTimeline = useMemo((): WsdaChatRow[] => {
+    if (!isWsda || arenaRoomId) return [];
+    const rows: WsdaChatRow[] = [];
+    let sk = 0;
+    for (const e of wsdaSystemFeed) {
+      if (e.speaker !== "System") continue;
+      rows.push({
+        kind: "system",
+        key: `sys-${sk++}-${e.at}-${e.text.slice(0, 32)}`,
+        at: e.at,
+        text: e.text,
+      });
+    }
+    if (wsdaOpeningLine) {
+      rows.push({ kind: "opening", entry: wsdaOpeningLine });
+    }
+    for (const p of userPosts) {
+      rows.push({
+        kind: "local",
+        id: p.id,
+        text: p.text,
+        postedAt: p.postedAt,
+      });
+    }
+    rows.sort((a, b) => {
+      const time = (r: WsdaChatRow) => {
+        switch (r.kind) {
+          case "system":
+            return +new Date(r.at);
+          case "opening":
+            return +new Date(r.entry.at);
+          case "local":
+            return +new Date(r.postedAt);
+          default:
+            return 0;
+        }
+      };
+      const ta = time(a);
+      const tb = time(b);
+      if (ta !== tb) return ta - tb;
+      if (a.kind === "local" && b.kind === "local") return a.id - b.id;
+      if (a.kind === b.kind) return 0;
+      if (a.kind === "system" || a.kind === "opening") return -1;
+      return 1;
+    });
+    return rows;
+  }, [isWsda, arenaRoomId, wsdaSystemFeed, wsdaOpeningLine, userPosts]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -222,25 +369,73 @@ export function DebateChatPanel({
     });
   }, [
     userPosts.length,
+    arenaMessages.length,
     visibleSimConPosts.length,
     phaseIndex,
     isWsda,
     roundComplete,
+    wsdaArenaTimeline.length,
+    wsdaLocalTimeline.length,
   ]);
 
   const youRoleTag = userRole === "pro" ? "Pro" : "Con";
+  const opponentRoleTag = userRole === "pro" ? "Con" : "Pro";
   const inputLocked = roundComplete || !userCanPost;
+
+  useEffect(() => {
+    arenaTranscriptRef.current.clear();
+  }, [arenaRoomId]);
+
+  useEffect(() => {
+    if (!arenaRoomId || !isWsda) return;
+    for (const m of arenaMessages) {
+      if (arenaTranscriptRef.current.has(m.id)) continue;
+      arenaTranscriptRef.current.add(m.id);
+      const isSelf = arenaUserId != null && m.user_id === arenaUserId;
+      appendTranscriptEntry({
+        speaker: isSelf
+          ? `You (${youRoleTag})`
+          : `${opponentName} (${opponentRoleTag})`,
+        text: m.body,
+        at: m.created_at,
+      });
+    }
+  }, [
+    arenaMessages,
+    arenaRoomId,
+    arenaUserId,
+    isWsda,
+    opponentName,
+    opponentRoleTag,
+    youRoleTag,
+    appendTranscriptEntry,
+  ]);
 
   function postMessage() {
     if (inputLocked) return;
     const text = draft.trim();
     if (!text) return;
+
+    if (arenaRoomId && isSupabaseConfigured()) {
+      void (async () => {
+        const result = await arenaSend(text);
+        if (result.error === null) {
+          setDraft("");
+        }
+      })();
+      return;
+    }
+
     postIdRef.current += 1;
-    setUserPosts((prev) => [...prev, { id: postIdRef.current, text }]);
+    const postedAt = new Date().toISOString();
+    setUserPosts((prev) => [
+      ...prev,
+      { id: postIdRef.current, text, postedAt },
+    ]);
     appendTranscriptEntry({
       speaker: isWsda ? `You (${youRoleTag})` : `${youDisplayName} (You)`,
       text,
-      at: new Date().toISOString(),
+      at: postedAt,
     });
     setDraft("");
   }
@@ -272,46 +467,6 @@ export function DebateChatPanel({
         ref={scrollRef}
         className="pixel-bg-grid relative max-h-[min(700px,55vh)] flex-1 space-y-10 overflow-y-auto p-4 md:p-6"
       >
-        {isWsda && phaseIndex === 0 ? (
-          userRole === "pro" ? (
-            <div className="flex flex-row-reverse items-start gap-4">
-              <div className="h-12 w-12 flex-shrink-0 border-4 border-red-500 bg-primary shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14">
-                <img
-                  alt=""
-                  className="h-full w-full object-cover"
-                  src={yourAvatarUrl}
-                />
-              </div>
-              <div className="max-w-[85%] border-2 border-on-primary-fixed-variant bg-primary-fixed/90 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5">
-                <span className="pixel-text-xs mb-3 block text-right font-bold uppercase text-on-primary-fixed-variant">
-                  You (Pro) — Pro Constructive
-                </span>
-                <p className="pixel-text-xs leading-loose text-on-primary-container">
-                  {proSpeech}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-start gap-4">
-              <div className="h-12 w-12 flex-shrink-0 border-4 border-red-600 bg-red-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14">
-                <img
-                  alt=""
-                  className="h-full w-full object-cover"
-                  src={opponentAvatarUrl}
-                />
-              </div>
-              <div className="max-w-[85%] border-2 border-red-900/50 bg-black/80 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5">
-                <span className="pixel-text-xs mb-3 block font-bold uppercase text-orange-400">
-                  {opponentName} (Pro) — Pro Constructive
-                </span>
-                <p className="pixel-text-xs leading-loose text-stone-200">
-                  {proSpeech}
-                </p>
-              </div>
-            </div>
-          )
-        ) : null}
-
         {!isWsda ? (
           <>
             <div className="flex items-start gap-4">
@@ -375,25 +530,191 @@ export function DebateChatPanel({
           </div>
         ) : null}
 
-        {userPosts.map(({ id, text }) => (
-          <div key={id} className="flex flex-row-reverse items-start gap-4">
-            <div className="h-12 w-12 flex-shrink-0 border-4 border-red-500 bg-primary shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14">
-              <img
-                alt=""
-                className="h-full w-full object-cover"
-                src={yourAvatarUrl}
-              />
-            </div>
-            <div className="max-w-[85%] border-2 border-on-primary-fixed-variant bg-primary-fixed/90 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5">
-              <span className="pixel-text-xs mb-3 block text-right font-bold uppercase text-on-primary-fixed-variant">
-                {isWsda ? `You (${youRoleTag})` : `${youDisplayName} (You)`}
-              </span>
-              <p className="pixel-text-xs leading-loose text-on-primary-container whitespace-pre-wrap">
-                {text}
-              </p>
-            </div>
-          </div>
-        ))}
+        {arenaRoomId && isWsda
+          ? wsdaArenaTimeline.map((row) => {
+              if (row.kind === "system") {
+                return (
+                  <div key={row.key} className="flex justify-center px-1">
+                    <div className="max-w-[min(100%,52rem)] border-2 border-orange-700/60 bg-orange-950/50 px-4 py-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.45)] md:px-5">
+                      <p className="pixel-text-xs font-black uppercase tracking-wide text-orange-400">
+                        System
+                      </p>
+                      <p className="pixel-text-xs mt-2 font-medium leading-relaxed whitespace-pre-wrap text-stone-200 normal-case">
+                        {row.text}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+              if (row.kind !== "arena") {
+                return null;
+              }
+              const m = row.msg;
+              const isSelf =
+                arenaUserId != null && m.user_id === arenaUserId;
+              return (
+                <div
+                  key={m.id}
+                  className={
+                    isSelf
+                      ? "flex flex-row-reverse items-start gap-4"
+                      : "flex items-start gap-4"
+                  }
+                >
+                  <div
+                    className={`h-12 w-12 flex-shrink-0 border-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14 ${
+                      isSelf
+                        ? "border-red-500 bg-primary"
+                        : "border-red-600 bg-red-900"
+                    }`}
+                  >
+                    <img
+                      alt=""
+                      className="h-full w-full object-cover"
+                      src={isSelf ? yourAvatarUrl : opponentAvatarUrl}
+                    />
+                  </div>
+                  <div
+                    className={`max-w-[85%] border-2 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5 ${
+                      isSelf
+                        ? "border-on-primary-fixed-variant bg-primary-fixed/90"
+                        : "border-red-900/50 bg-black/80"
+                    }`}
+                  >
+                    <span
+                      className={`pixel-text-xs mb-3 block font-bold uppercase ${
+                        isSelf
+                          ? "text-right text-on-primary-fixed-variant"
+                          : "text-orange-400"
+                      }`}
+                    >
+                      {isSelf
+                        ? `You (${youRoleTag})`
+                        : `${opponentName} (${opponentRoleTag})`}
+                    </span>
+                    <p
+                      className={`pixel-text-xs leading-loose whitespace-pre-wrap ${
+                        isSelf ? "text-on-primary-container" : "text-stone-200"
+                      }`}
+                    >
+                      {m.body}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          : null}
+
+        {!arenaRoomId && isWsda
+          ? wsdaLocalTimeline.map((row) => {
+              if (row.kind === "system") {
+                return (
+                  <div key={row.key} className="flex justify-center px-1">
+                    <div className="max-w-[min(100%,52rem)] border-2 border-orange-700/60 bg-orange-950/50 px-4 py-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.45)] md:px-5">
+                      <p className="pixel-text-xs font-black uppercase tracking-wide text-orange-400">
+                        System
+                      </p>
+                      <p className="pixel-text-xs mt-2 font-medium leading-relaxed whitespace-pre-wrap text-stone-200 normal-case">
+                        {row.text}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+              if (row.kind === "opening") {
+                const e = row.entry;
+                const isYou = e.speaker.startsWith("You ");
+                return isYou ? (
+                  <div
+                    key={`opening-${e.at}`}
+                    className="flex flex-row-reverse items-start gap-4"
+                  >
+                    <div className="h-12 w-12 flex-shrink-0 border-4 border-red-500 bg-primary shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14">
+                      <img
+                        alt=""
+                        className="h-full w-full object-cover"
+                        src={yourAvatarUrl}
+                      />
+                    </div>
+                    <div className="max-w-[85%] border-2 border-on-primary-fixed-variant bg-primary-fixed/90 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5">
+                      <span className="pixel-text-xs mb-3 block text-right font-bold uppercase text-on-primary-fixed-variant">
+                        {e.speaker} — Pro Constructive
+                      </span>
+                      <p className="pixel-text-xs leading-loose text-on-primary-container">
+                        {e.text}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    key={`opening-${e.at}`}
+                    className="flex items-start gap-4"
+                  >
+                    <div className="h-12 w-12 flex-shrink-0 border-4 border-red-600 bg-red-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14">
+                      <img
+                        alt=""
+                        className="h-full w-full object-cover"
+                        src={opponentAvatarUrl}
+                      />
+                    </div>
+                    <div className="max-w-[85%] border-2 border-red-900/50 bg-black/80 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5">
+                      <span className="pixel-text-xs mb-3 block font-bold uppercase text-orange-400">
+                        {e.speaker} — Pro Constructive
+                      </span>
+                      <p className="pixel-text-xs leading-loose text-stone-200">{e.text}</p>
+                    </div>
+                  </div>
+                );
+              }
+              if (row.kind === "local") {
+                return (
+                  <div
+                    key={row.id}
+                    className="flex flex-row-reverse items-start gap-4"
+                  >
+                    <div className="h-12 w-12 flex-shrink-0 border-4 border-red-500 bg-primary shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14">
+                      <img
+                        alt=""
+                        className="h-full w-full object-cover"
+                        src={yourAvatarUrl}
+                      />
+                    </div>
+                    <div className="max-w-[85%] border-2 border-on-primary-fixed-variant bg-primary-fixed/90 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5">
+                      <span className="pixel-text-xs mb-3 block text-right font-bold uppercase text-on-primary-fixed-variant">
+                        {`You (${youRoleTag})`}
+                      </span>
+                      <p className="pixel-text-xs leading-loose whitespace-pre-wrap text-on-primary-container">
+                        {row.text}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })
+          : null}
+
+        {!isWsda
+          ? userPosts.map(({ id, text }) => (
+              <div key={id} className="flex flex-row-reverse items-start gap-4">
+                <div className="h-12 w-12 flex-shrink-0 border-4 border-red-500 bg-primary shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14">
+                  <img
+                    alt=""
+                    className="h-full w-full object-cover"
+                    src={yourAvatarUrl}
+                  />
+                </div>
+                <div className="max-w-[85%] border-2 border-on-primary-fixed-variant bg-primary-fixed/90 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5">
+                  <span className="pixel-text-xs mb-3 block text-right font-bold uppercase text-on-primary-fixed-variant">
+                    {`${youDisplayName} (You)`}
+                  </span>
+                  <p className="pixel-text-xs leading-loose text-on-primary-container whitespace-pre-wrap">
+                    {text}
+                  </p>
+                </div>
+              </div>
+            ))
+          : null}
 
         {visibleSimConPosts.map(({ id, text }) => (
           <div key={id} className="flex items-start gap-4">
@@ -422,11 +743,13 @@ export function DebateChatPanel({
           {isWsda
             ? roundComplete
               ? "Debate finished — all WSDA segments complete."
-              : simulateConOpponent
-                ? "Opponent (Con) is simulated in chat — you cannot type while Con is speaking."
-                : userCanPost && !roundComplete
-                  ? "Your side may speak — stay within the rules for this phase."
-                  : inputDisabledHint ?? "Wait for your turn."
+              : arenaRoomId
+                ? "Live arena — messages sync between both players."
+                : simulateConOpponent
+                  ? "Opponent (Con) is simulated in chat — you cannot type while Con is speaking."
+                  : userCanPost && !roundComplete
+                    ? "Your side may speak — stay within the rules for this phase."
+                    : inputDisabledHint ?? "Wait for your turn."
             : "Mining response..."}
         </div>
       </div>

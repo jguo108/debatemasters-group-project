@@ -6,11 +6,8 @@ import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { MaterialIcon } from "../MaterialIcon";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
-import {
-  appendDebateResultToHistory,
-  createForfeitResult,
-  type ForfeitMeta,
-} from "@/lib/data/history-storage";
+import type { ForfeitMeta } from "@/lib/data/history-storage";
+import { recordDebaterExit } from "@/lib/data/debater-exit";
 import { DebateEndConfirmModal } from "@/components/debate/DebateEndConfirmModal";
 import {
   ensureUserProfileInitialized,
@@ -147,16 +144,23 @@ export function OnboardingSidebar({
         onConfirm={async () => {
           if (!leaveGuardSessionMeta || isLeaving) return;
           setIsLeaving(true);
-          const result = createForfeitResult(leaveGuardSessionMeta);
-          await appendDebateResultToHistory(result);
-          const destination =
-            pendingExitHref === "/results"
-              ? `/results/${encodeURIComponent(result.id)}`
-              : (pendingExitHref ?? "/results");
-          if (destination === "/login" && isSupabaseConfigured()) {
-            await createClient().auth.signOut();
+          try {
+            const outcome = await recordDebaterExit(leaveGuardSessionMeta);
+            let destination: string;
+            if (outcome.type === "already_self") {
+              destination = pendingExitHref ?? "/results";
+            } else if (pendingExitHref === "/results") {
+              destination = `/results/${encodeURIComponent(outcome.resultId)}`;
+            } else {
+              destination = pendingExitHref ?? "/results";
+            }
+            if (destination === "/login" && isSupabaseConfigured()) {
+              await createClient().auth.signOut();
+            }
+            router.push(destination);
+          } finally {
+            setIsLeaving(false);
           }
-          router.push(destination);
         }}
       />
     </>

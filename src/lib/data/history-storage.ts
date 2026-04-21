@@ -30,6 +30,10 @@ export type ForfeitMeta = {
   opponentName: string;
   userRole?: "pro" | "con";
   debateFormat?: "wsda";
+  /** Supabase `debate_rooms.id` — used for stable result IDs and server forfeit RPC. */
+  arenaRoomId?: string;
+  /** Current user id (optional; enables stable `debate_results` id for arena forfeits). */
+  selfUserId?: string;
 };
 
 function fallbackTranscript(
@@ -378,7 +382,10 @@ export function createForfeitResult(meta: ForfeitMeta): DebateResult {
   const yourSide = meta.userRole === "pro" ? "Pro" : "Con";
   const opponentSide = yourSide === "Pro" ? "Con" : "Pro";
   const formatTag = meta.debateFormat === "wsda" ? "WSDA" : "Standard";
-  const id = `forfeit_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`;
+  const id =
+    meta.arenaRoomId && meta.selfUserId
+      ? `forfeit_${meta.arenaRoomId}_${meta.selfUserId}`
+      : `forfeit_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`;
 
   const activeTranscript = readActiveDebateTranscript(meta.sessionId);
   const transcript =
@@ -438,6 +445,72 @@ export function createForfeitResult(meta: ForfeitMeta): DebateResult {
       },
     ],
     loot: [{ label: "Consolation Coin x20", tone: "gold" }],
+    transcript,
+  };
+}
+
+/** Opponent wins because the other player ended/forfeited the arena debate. */
+export function createOpponentVictoryByForfeitResult(meta: ForfeitMeta): DebateResult {
+  const now = new Date();
+  const yourSide = meta.userRole === "pro" ? "Pro" : "Con";
+  const opponentSide = yourSide === "Pro" ? "Con" : "Pro";
+  const formatTag = meta.debateFormat === "wsda" ? "WSDA" : "Standard";
+  const id =
+    meta.arenaRoomId && meta.selfUserId
+      ? `victory_forfeit_${meta.arenaRoomId}_${meta.selfUserId}`
+      : `victory_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const activeTranscript = readActiveDebateTranscript(meta.sessionId);
+  const transcript =
+    activeTranscript.length > 0
+      ? [...activeTranscript]
+      : [
+          {
+            speaker: "System",
+            text: `Debate opened: ${meta.topicTitle}`,
+            at: now.toISOString(),
+          },
+        ];
+
+  transcript.push({
+    speaker: "System",
+    text: `${meta.opponentName} (${opponentSide}) ended the debate. You win by forfeit.`,
+    at: now.toISOString(),
+  });
+
+  return {
+    id,
+    topicTitle: meta.topicTitle,
+    debatedAt: now.toISOString(),
+    outcome: "victory",
+    headline: "VICTORY BY FORFEIT",
+    subline: `${meta.opponentName} ended the debate. Your side (${yourSide}) wins.`,
+    level: 44,
+    xpCurrent: 2650,
+    xpToNext: 3000,
+    xpEarned: 120,
+    feedback: `Your opponent forfeited this ${formatTag} round. You receive the win.`,
+    quote: "Presence wins when the room stays fair — finish strong next time too.",
+    scores: { clarity: 4.1, evidence: 3.9 },
+    suggestedTomes: [
+      {
+        title: "Closing Mechanics",
+        subtitle: "Seal the round",
+        kind: "rare",
+        label: "+3 Focus",
+        accent: "primary",
+        icon: "menu_book",
+      },
+      {
+        title: "Arena Composure II",
+        subtitle: "Stay through the bell",
+        kind: "enchanted",
+        label: "+2 Lvl",
+        accent: "tertiary",
+        icon: "psychology",
+      },
+    ],
+    loot: [{ label: "Victory Crest x1", tone: "emerald" }],
     transcript,
   };
 }

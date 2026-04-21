@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo } from "react";
 import { DebateChatPanel } from "@/components/DebateChatPanel";
@@ -18,10 +18,11 @@ export function WsdaDebateRoom() {
 
   const simulateConOpponent = useMemo(
     () =>
+      !session.arenaRoomId &&
       session.userRole === "pro" &&
       activeSpeaker === "con" &&
       !isComplete,
-    [session.userRole, activeSpeaker, isComplete],
+    [session.arenaRoomId, session.userRole, activeSpeaker, isComplete],
   );
 
   return (
@@ -38,6 +39,9 @@ export function WsdaDebateRoom() {
       secondsLeft={secondsLeft}
       roundComplete={isComplete}
       simulateConOpponent={simulateConOpponent}
+      arenaRoomId={session.arenaRoomId}
+      selfAvatarUrl={session.selfAvatarUrl}
+      opponentAvatarUrl={session.opponentAvatarUrl}
     />
   );
 }

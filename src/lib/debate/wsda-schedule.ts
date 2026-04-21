@@ -146,6 +146,22 @@ export function wsdaRoundChatCopy(phaseIndex: number): {
   };
 }
 
+/** Shown in chat when a segment ends — names the segment that finished and the next segment. */
+export function wsdaRoundTransitionMessage(completedPhaseIndex: number): string | null {
+  const ended = WSDA_PHASES[completedPhaseIndex];
+  const nextIdx = completedPhaseIndex + 1;
+  const next = WSDA_PHASES[nextIdx];
+  if (!ended || !next) return null;
+  const endedCopy = wsdaRoundChatCopy(completedPhaseIndex);
+  const nextCopy = wsdaRoundChatCopy(nextIdx);
+  if (!endedCopy || !nextCopy) return null;
+  return (
+    `Session ${endedCopy.roundNumber}/${endedCopy.totalRounds} (${endedCopy.headline}) has ended. ` +
+    `Next — Session ${nextCopy.roundNumber}/${nextCopy.totalRounds}: ${nextCopy.headline}. ` +
+    `${nextCopy.purpose} ${nextCopy.instruction}`
+  );
+}
+
 /** Pro constructive: definitions, framework, impacts — no ad hominem (WSDA). */
 export function proConstructiveOpening(topicTitle: string): string {
   return (

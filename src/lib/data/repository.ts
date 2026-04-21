@@ -62,6 +62,33 @@ export function getMockDebateSession(): DebateSession {
 }
 
 /** Resolves mock debate session with the topic chosen on `/topics` (or custom title). */
+/** Live arena room from DB — topic + opponent resolved server-side. */
+export function buildArenaDebateSession(input: {
+  roomId: string;
+  topicTitle: string;
+  opponentName: string;
+  userRole: "pro" | "con";
+  selfAvatarUrl?: string;
+  opponentAvatarUrl?: string;
+}): DebateSession {
+  const first = WSDA_PHASES[0];
+  return {
+    ...mockDebateSession,
+    id: `debate_arena_${input.roomId}`,
+    arenaRoomId: input.roomId,
+    topicTitle: input.topicTitle,
+    locationLabel: "WSDA Arena — Live match",
+    phaseLabel: wsdaPhaseBanner(0),
+    timerMmSs: first ? formatMmSs(first.durationSec) : "02:00",
+    phaseDurationSeconds: first?.durationSec ?? 120,
+    debateFormat: "wsda",
+    opponentName: input.opponentName,
+    userRole: input.userRole,
+    selfAvatarUrl: input.selfAvatarUrl,
+    opponentAvatarUrl: input.opponentAvatarUrl,
+  };
+}
+
 export function getDebateSessionForTopic(
   topicId: string | null | undefined,
   customTitle: string | null | undefined,

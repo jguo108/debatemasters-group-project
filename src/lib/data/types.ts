@@ -33,6 +33,11 @@ export interface DebateSession {
   debateFormat?: "wsda";
   /** Initial segment length for live countdown (WSDA). */
   phaseDurationSeconds?: number;
+  /** Supabase `debate_rooms.id` — enables live chat sync between matched players. */
+  arenaRoomId?: string;
+  /** From `profiles` — live arena only; correct headshots in chat vs local/mock defaults. */
+  selfAvatarUrl?: string;
+  opponentAvatarUrl?: string;
 }
 
 export interface DebateTranscriptEntry {
