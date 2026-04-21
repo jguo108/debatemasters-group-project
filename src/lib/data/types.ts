@@ -48,6 +48,8 @@ export interface DebateTranscriptEntry {
 
 export interface DebateResult {
   id: string;
+  /** When set, this debate is tied to a live arena room — enables paired purge when both players hide history. */
+  arenaRoomId?: string;
   /** Topic line for history list and headers */
   topicTitle: string;
   /** ISO date string (e.g. for sorting / display) */

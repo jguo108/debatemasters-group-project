@@ -74,7 +74,7 @@ export function OnboardingSidebar({
           >
             <MaterialIcon name="history" className="mr-4" />
             <span className="brick-sans text-sm font-black uppercase tracking-widest">
-              Debate History
+              History
             </span>
           </Link>
         </nav>

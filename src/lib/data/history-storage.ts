@@ -167,7 +167,7 @@ async function resolveHistoryFromAuth(): Promise<void> {
 
   const { data, error } = await supabase
     .from("debate_results")
-    .select("payload")
+    .select("payload, arena_room_id")
     .eq("user_id", session.user.id)
     .eq("hidden", false)
     .order("debated_at", { ascending: false });
@@ -176,9 +176,15 @@ async function resolveHistoryFromAuth(): Promise<void> {
   if (error) {
     supabaseHistoryRows = [];
   } else {
-    supabaseHistoryRows = (data ?? []).map((row) =>
-      normalizeDebateResult(row.payload as DebateResult),
-    );
+    supabaseHistoryRows = (data ?? []).map((row) => {
+      const payload = row.payload as DebateResult;
+      const arenaRoomId =
+        (row as { arena_room_id?: string | null }).arena_room_id ??
+        payload.arenaRoomId;
+      return normalizeDebateResult(
+        arenaRoomId ? { ...payload, arenaRoomId } : payload,
+      );
+    });
   }
   notifyHistoryListeners();
 }
@@ -219,13 +225,17 @@ export async function appendDebateResultToHistory(
       data: { session },
     } = await supabase.auth.getSession();
     if (session?.user) {
-      const { error } = await supabase.from("debate_results").insert({
+      const insertRow: Record<string, unknown> = {
         id: normalized.id,
         user_id: session.user.id,
         payload: normalized as unknown as Record<string, unknown>,
         debated_at: normalized.debatedAt,
         hidden: false,
-      });
+      };
+      if (normalized.arenaRoomId) {
+        insertRow.arena_room_id = normalized.arenaRoomId;
+      }
+      const { error } = await supabase.from("debate_results").insert(insertRow);
       if (error) {
         console.warn("appendDebateResultToHistory:", error.message);
       }
@@ -412,6 +422,7 @@ export function createForfeitResult(meta: ForfeitMeta): DebateResult {
 
   return {
     id,
+    ...(meta.arenaRoomId ? { arenaRoomId: meta.arenaRoomId } : {}),
     topicTitle: meta.topicTitle,
     debatedAt: now.toISOString(),
     outcome: "forfeit",
@@ -480,6 +491,7 @@ export function createOpponentVictoryByForfeitResult(meta: ForfeitMeta): DebateR
 
   return {
     id,
+    ...(meta.arenaRoomId ? { arenaRoomId: meta.arenaRoomId } : {}),
     topicTitle: meta.topicTitle,
     debatedAt: now.toISOString(),
     outcome: "victory",

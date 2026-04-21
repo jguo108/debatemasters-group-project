@@ -42,11 +42,15 @@ export async function migrateLocalDataToSupabaseIfNeeded(): Promise<void> {
 }
 
 function debateResultToRow(userId: string, result: DebateResult) {
-  return {
+  const row: Record<string, unknown> = {
     id: result.id,
     user_id: userId,
     payload: result as unknown as Record<string, unknown>,
     debated_at: result.debatedAt,
     hidden: false,
   };
+  if (result.arenaRoomId) {
+    row.arena_room_id = result.arenaRoomId;
+  }
+  return row;
 }
