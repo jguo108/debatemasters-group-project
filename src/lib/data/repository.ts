@@ -44,7 +44,7 @@ function parseRequestedSoloDurationSeconds(
   durationMinutes: string | null | undefined,
 ): number | undefined {
   const value = Number.parseInt(durationMinutes?.trim() ?? "", 10);
-  if (value === 3 || value === 5 || value === 10 || value === 15) {
+  if (value === 1 || value === 3 || value === 5 || value === 10 || value === 15) {
     return value * 60;
   }
   return undefined;

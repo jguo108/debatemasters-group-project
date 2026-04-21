@@ -426,14 +426,14 @@ export function createForfeitResult(meta: ForfeitMeta): DebateResult {
     topicTitle: meta.topicTitle,
     debatedAt: now.toISOString(),
     outcome: "forfeit",
-    headline: "FORFEIT LOSS",
-    subline: `You clicked End. ${meta.opponentName} (${opponentSide}) wins by forfeit.`,
+    headline: "DEFEAT BY EARLY EXIT",
+    subline: `You ended the debate before the timer finished. ${meta.opponentName} (${opponentSide}) is awarded the win by forfeit.`,
     level: 42,
     xpCurrent: 2480,
     xpToNext: 3000,
     xpEarned: 20,
     feedback:
-      `Debate ended early by manual End action. In this ${formatTag} round, clicking End counts as an immediate forfeit for your side (${yourSide}).`,
+      `You exited the debate before completion, so the round is recorded as an automatic forfeit loss for your side (${yourSide}). Because the match did not run to time, no final judging comparison is applied. Stay in until the timer ends if you want full AI adjudication and feedback based on complete arguments.`,
     quote:
       "Discipline wins rounds. Stay in until the clock and structure are complete.",
     scores: { clarity: 2.5, evidence: 2.2 },

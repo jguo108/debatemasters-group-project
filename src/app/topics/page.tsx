@@ -22,9 +22,9 @@ export default function TopicsPage() {
   const topics = getMockTopics();
   const [soloRole, setSoloRole] = useState<"pro" | "con">("pro");
   const [soloDurationMinutes, setSoloDurationMinutes] = useState<
-    3 | 5 | 10 | 15
+    1 | 3 | 5 | 10 | 15
   >(5);
-  const durationOptions: Array<3 | 5 | 10 | 15> = [3, 5, 10, 15];
+  const durationOptions: Array<1 | 3 | 5 | 10 | 15> = [1, 3, 5, 10, 15];
 
   return (
     <div className="bg-background font-[family-name:var(--font-inter)] text-on-background selection:bg-primary selection:text-white">

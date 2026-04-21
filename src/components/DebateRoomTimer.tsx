@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const SOLO_TOTAL_SECONDS = 15 * 60;
 
@@ -14,6 +14,7 @@ export function DebateRoomTimer({
   isSoloAi,
   staticMmSs,
   soloTotalSeconds,
+  onSoloElapsed,
   phaseCountdownSeconds,
   controlledSeconds,
   compact,
@@ -22,6 +23,8 @@ export function DebateRoomTimer({
   staticMmSs: string;
   /** Solo-only countdown length; defaults to 15 minutes. */
   soloTotalSeconds?: number;
+  /** Fired once when solo timer reaches 00:00. */
+  onSoloElapsed?: () => void;
   /** WSDA (and similar): countdown for the active speech segment. */
   phaseCountdownSeconds?: number;
   /** Parent-driven countdown (e.g. WSDA phase engine). */
@@ -34,6 +37,7 @@ export function DebateRoomTimer({
   const [phaseLeft, setPhaseLeft] = useState(
     () => phaseCountdownSeconds ?? 0,
   );
+  const notifiedElapsedRef = useRef(false);
 
   useEffect(() => {
     if (phaseCountdownSeconds === undefined) return;
@@ -45,10 +49,20 @@ export function DebateRoomTimer({
   useEffect(() => {
     if (!isSoloAi) return;
     const id = window.setInterval(() => {
-      setSecondsLeft((s) => (s <= 0 ? 0 : s - 1));
+      setSecondsLeft((s) => {
+        if (s <= 0) return 0;
+        const next = s - 1;
+        if (next === 0 && !notifiedElapsedRef.current) {
+          notifiedElapsedRef.current = true;
+          queueMicrotask(() => {
+            onSoloElapsed?.();
+          });
+        }
+        return next;
+      });
     }, 1000);
     return () => window.clearInterval(id);
-  }, [isSoloAi]);
+  }, [isSoloAi, onSoloElapsed]);
 
   useEffect(() => {
     if (phaseCountdownSeconds === undefined || controlledSeconds !== undefined)

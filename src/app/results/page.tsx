@@ -20,6 +20,19 @@ function formatDebateWhen(iso: string): string {
   }
 }
 
+function historyOutcomeLabel(d: {
+  outcome: "victory" | "effort" | "forfeit";
+  headline: string;
+}): "Victory" | "Defeat" | "Tie" {
+  if (d.outcome === "victory") return "Victory";
+  if (d.outcome === "forfeit") return "Defeat";
+  // AI judged losses were historically stored as "effort"; show as Defeat in history.
+  if (d.outcome === "effort" && d.headline.toUpperCase().startsWith("AI JUDGE:")) {
+    return "Defeat";
+  }
+  return "Tie";
+}
+
 export default function ResultsPage() {
   const history = useCombinedDebateHistory();
   const [visibleCount, setVisibleCount] = useState(4);
@@ -44,7 +57,18 @@ export default function ResultsPage() {
       </header>
 
       <ul className="space-y-4">
-        {visibleHistory.map((d) => (
+        {visibleHistory.map((d) => {
+          const label = historyOutcomeLabel({
+            outcome: d.outcome,
+            headline: d.headline,
+          });
+          const labelClass =
+            label === "Victory"
+              ? "border-primary bg-primary/30 text-primary-fixed"
+              : label === "Defeat"
+                ? "border-red-500 bg-red-950 text-red-300"
+                : "border-stone-600 bg-stone-800 text-stone-300";
+          return (
           <li key={d.id} className="w-full list-none">
             <div className="grid w-full grid-cols-[minmax(0,1fr)_3.5rem] items-stretch gap-2">
               <Link
@@ -64,19 +88,9 @@ export default function ResultsPage() {
                 </div>
                 <div className="flex min-w-[9.5rem] shrink-0 items-center justify-end gap-4">
                   <span
-                    className={`w-[5.75rem] border-2 px-3 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide ${
-                      d.outcome === "victory"
-                        ? "border-primary bg-primary/30 text-primary-fixed"
-                        : d.outcome === "forfeit"
-                          ? "border-red-500 bg-red-950 text-red-300"
-                        : "border-stone-600 bg-stone-800 text-stone-300"
-                    }`}
+                    className={`w-[5.75rem] border-2 px-3 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide ${labelClass}`}
                   >
-                    {d.outcome === "victory"
-                      ? "Victory"
-                      : d.outcome === "forfeit"
-                        ? "Defeat"
-                        : "Tie"}
+                    {label}
                   </span>
                   <span className="text-primary-fixed md:hidden" aria-hidden>
                     <MaterialIcon name="chevron_right" />
@@ -100,7 +114,8 @@ export default function ResultsPage() {
               </button>
             </div>
           </li>
-        ))}
+        );
+        })}
       </ul>
 
       {hasMore ? (

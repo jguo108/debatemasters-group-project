@@ -35,6 +35,7 @@ type SoloChatRow = {
   id: number;
   speaker: "you" | "opponent";
   text: string;
+  replySource?: "deepseek" | "fallback";
 };
 
 type DebateChatPanelProps = {
@@ -92,6 +93,7 @@ export function DebateChatPanel({
   const [draft, setDraft] = useState("");
   const [soloChatRows, setSoloChatRows] = useState<SoloChatRow[]>([]);
   const [soloAwaitingReply, setSoloAwaitingReply] = useState(false);
+  const [soloTimeExpired, setSoloTimeExpired] = useState(false);
   const [soloUsedFallback, setSoloUsedFallback] = useState(false);
   const [soloFallbackReason, setSoloFallbackReason] = useState<string | null>(null);
   const [userPosts, setUserPosts] = useState<
@@ -103,6 +105,8 @@ export function DebateChatPanel({
     { id: number; text: string; phaseIndex: number }[]
   >([]);
   const transcriptRef = useRef<DebateTranscriptEntry[]>([]);
+  const soloReplyAbortRef = useRef<AbortController | null>(null);
+  const soloTimeExpiredRef = useRef(false);
   const postIdRef = useRef(0);
   const soloRowIdRef = useRef(0);
   const simPostIdRef = useRef(0);
@@ -149,7 +153,13 @@ export function DebateChatPanel({
   );
 
   const requestSoloOpponentReply = useCallback(
-    async (transcript: DebateTranscriptEntry[]) => {
+    async (
+      transcript: DebateTranscriptEntry[],
+      signal?: AbortSignal,
+    ): Promise<
+      | { aborted: true; reply: null; usedFallback: false; reason: null }
+      | { aborted: false; reply: string; usedFallback: boolean; reason: string | null }
+    > => {
       const fallbacks = [
         "Your claim assumes intent matters more than outcomes, but policy is judged by impact first.",
         "You frame risk well, yet you still need a practical mechanism that scales beyond ideal cases.",
@@ -168,6 +178,7 @@ export function DebateChatPanel({
         const res = await fetch("/api/ai/opponent-reply", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal,
           body: JSON.stringify({
             topicTitle: topicTitle?.trim() || phaseLabel,
             opponentName,
@@ -183,19 +194,30 @@ export function DebateChatPanel({
         if (!res.ok || !data.ok || typeof data.reply !== "string" || !data.reply.trim()) {
           console.warn("opponent-reply failed:", data.error ?? "unknown error");
           return {
+            aborted: false as const,
             reply: fallback,
             usedFallback: true,
             reason: data.error ?? "Model response invalid.",
           };
         }
         return {
+          aborted: false as const,
           reply: data.reply.trim(),
           usedFallback: false,
           reason: null,
         };
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return {
+            aborted: true as const,
+            reply: null,
+            usedFallback: false,
+            reason: null,
+          };
+        }
         console.warn("opponent-reply request threw:", error);
         return {
+          aborted: false as const,
           reply: fallback,
           usedFallback: true,
           reason: error instanceof Error ? error.message : "Network failure.",
@@ -253,6 +275,8 @@ export function DebateChatPanel({
     setTranscriptEntries(initialTranscript);
     soloRowIdRef.current = 0;
     setSoloChatRows([]);
+    setSoloTimeExpired(false);
+    soloTimeExpiredRef.current = false;
   }, [
     appendTranscriptEntry,
     isWsda,
@@ -266,6 +290,23 @@ export function DebateChatPanel({
     youDisplayName,
     userRole,
   ]);
+
+  useEffect(() => {
+    if (isWsda) return;
+    const onTimeUp = (event: Event) => {
+      const custom = event as CustomEvent<{ sessionId?: string }>;
+      if (custom.detail?.sessionId !== sessionId) return;
+      soloTimeExpiredRef.current = true;
+      setSoloTimeExpired(true);
+      soloReplyAbortRef.current?.abort();
+      soloReplyAbortRef.current = null;
+      setSoloAwaitingReply(false);
+    };
+    window.addEventListener("solo-debate-time-up", onTimeUp as EventListener);
+    return () => {
+      window.removeEventListener("solo-debate-time-up", onTimeUp as EventListener);
+    };
+  }, [isWsda, sessionId]);
 
   useEffect(() => {
     if (!isWsda) return;
@@ -430,7 +471,10 @@ export function DebateChatPanel({
 
   const youRoleTag = userRole === "pro" ? "Pro" : "Con";
   const opponentRoleTag = userRole === "pro" ? "Con" : "Pro";
-  const inputLocked = roundComplete || !userCanPost || (!isWsda && soloAwaitingReply);
+  const inputLocked =
+    roundComplete ||
+    !userCanPost ||
+    (!isWsda && (soloAwaitingReply || soloTimeExpired));
 
   useEffect(() => {
     arenaTranscriptRef.current.clear();
@@ -495,11 +539,24 @@ export function DebateChatPanel({
     });
     setDraft("");
     if (!isWsda) {
+      if (soloTimeExpiredRef.current) return;
       setSoloUsedFallback(false);
       setSoloFallbackReason(null);
       setSoloAwaitingReply(true);
       void (async () => {
-        const result = await requestSoloOpponentReply(transcriptRef.current);
+        const controller = new AbortController();
+        soloReplyAbortRef.current = controller;
+        const result = await requestSoloOpponentReply(
+          transcriptRef.current,
+          controller.signal,
+        );
+        if (soloReplyAbortRef.current === controller) {
+          soloReplyAbortRef.current = null;
+        }
+        if (result.aborted || soloTimeExpiredRef.current || result.reply === null) {
+          setSoloAwaitingReply(false);
+          return;
+        }
         const at = new Date().toISOString();
         soloRowIdRef.current += 1;
         const rowId = soloRowIdRef.current;
@@ -507,7 +564,12 @@ export function DebateChatPanel({
         setSoloFallbackReason(result.reason);
         setSoloChatRows((prev) => [
           ...prev,
-          { id: rowId, speaker: "opponent", text: result.reply },
+          {
+            id: rowId,
+            speaker: "opponent",
+            text: result.reply,
+            replySource: result.usedFallback ? "fallback" : "deepseek",
+          },
         ]);
         appendTranscriptEntry({
           speaker: opponentName,
@@ -522,6 +584,8 @@ export function DebateChatPanel({
   const footerHint =
     roundComplete
       ? "Round complete. Use End to leave or review results."
+      : !isWsda && soloTimeExpired
+        ? "Time is up. Solo debate has ended."
       : !isWsda && soloAwaitingReply
         ? "Opponent is responding..."
       : inputLocked
@@ -589,6 +653,24 @@ export function DebateChatPanel({
                     >
                       {isSelf ? `${youDisplayName} (You)` : opponentName}
                     </span>
+                    {!isSelf && row.replySource ? (
+                      <span
+                        className={`mb-3 inline-flex border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                          row.replySource === "fallback"
+                            ? "border-orange-700 bg-orange-950/60 text-orange-300"
+                            : "border-emerald-700 bg-emerald-950/60 text-emerald-300"
+                        }`}
+                        title={
+                          row.replySource === "fallback"
+                            ? "Backup response generated locally because AI call failed."
+                            : "Response generated by DeepSeek API."
+                        }
+                      >
+                        {row.replySource === "fallback"
+                          ? "Fallback Reply"
+                          : "DeepSeek Reply"}
+                      </span>
+                    ) : null}
                     <p
                       className={`pixel-text-xs leading-loose whitespace-pre-wrap ${
                         isSelf ? "text-on-primary-container" : "text-stone-200"

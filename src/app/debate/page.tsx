@@ -2,6 +2,7 @@
 import { DebateRoomTimer } from "@/components/DebateRoomTimer";
 import { DebateRoleMatchupStrip } from "@/components/debate/DebateRoleMatchupStrip";
 import { ForfeitEndButton } from "@/components/debate/ForfeitEndButton";
+import { SoloDebateTimeoutTimer } from "@/components/debate/SoloDebateTimeoutTimer";
 import { WsdaDebateRoom } from "@/components/WsdaDebateRoom";
 import { WsdaDebateProvider } from "@/components/wsda/WsdaDebateProvider";
 import { WsdaRoleMatchupStrip } from "@/components/wsda/WsdaRoleMatchupStrip";
@@ -279,8 +280,15 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                           {session.topicTitle}
                         </h1>
                       </div>
-                      <DebateRoomTimer
-                        isSoloAi={isSoloAiDebate}
+                      <SoloDebateTimeoutTimer
+                        sessionMeta={{
+                          sessionId: session.id,
+                          topicTitle: session.topicTitle,
+                          opponentName: session.opponentName,
+                          userRole: session.userRole,
+                          debateFormat: session.debateFormat,
+                          arenaRoomId: session.arenaRoomId,
+                        }}
                         staticMmSs={session.timerMmSs}
                         soloTotalSeconds={session.soloDurationSeconds}
                         compact
@@ -311,7 +319,9 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                         Tip
                       </h3>
                       <p className="pixel-text-xs leading-normal text-red-200">
-                        Use End Debate whenever you want AI judging and feedback.
+                        End Debate before time is up counts as an immediate forfeit
+                        loss. Let the timer finish if you want AI judging and
+                        full feedback.
                       </p>
                     </div>
                   </div>
@@ -343,8 +353,8 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                     }}
                     className="inline-flex w-full items-center justify-center border-b-4 border-orange-900 bg-orange-600 px-4 py-3 text-white pixel-text-xs font-black uppercase shadow-[4px_4px_0px_0px_#451a03] transition-all hover:bg-orange-500 active:translate-y-1 active:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
                     ariaLabel="End debate now"
+                    confirmMessage="End this debate now? This ends the match immediately and records a forfeit loss."
                     modalRootId="debate-chat-area"
-                    resolveWithJudge
                   >
                     End Debate
                   </ForfeitEndButton>
