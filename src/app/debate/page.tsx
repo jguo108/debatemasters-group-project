@@ -292,39 +292,24 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                 <section className="col-span-12 border-r-4 border-red-950 bg-[#2a0808]/90 p-6 backdrop-blur-sm lg:col-span-3">
                   <h2 className="pixel-text-base mb-8 flex items-center gap-2 font-black uppercase text-red-100">
                     <MaterialIcon name="menu_book" className="text-orange-500" />
-                    Quest Rules
+                    Solo Debate
                   </h2>
-                  <div className="space-y-8">
+                  <div className="space-y-6">
                     <div className="border-2 border-red-900 bg-black/60 p-4 shadow-[4px_4px_0px_0px_#7f1d1d]">
                       <h3 className="pixel-text-xs mb-3 font-bold uppercase text-orange-500">
-                        Objective
+                        Format
                       </h3>
                       <p className="pixel-text-xs text-stone-200">
-                        Build a cohesive logical structure using 3 blocks.
+                        This solo debate is free-form. You can argue in your own style
+                        without phase restrictions.
                       </p>
-                    </div>
-                    <div className="border-2 border-red-900 bg-black/60 p-4 shadow-[4px_4px_0px_0px_#7f1d1d]">
-                      <h3 className="pixel-text-xs mb-3 font-bold uppercase text-orange-500">
-                        Phase Limits
-                      </h3>
-                      <ul className="pixel-text-xs space-y-3 text-stone-200">
-                        <li className="flex items-center gap-2">
-                          <span className="h-2 w-2 bg-primary" /> 120s Argument
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <span className="h-2 w-2 bg-tertiary" /> 60s Rebuttal
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <span className="h-2 w-2 bg-orange-600" /> 45s Polish
-                        </li>
-                      </ul>
                     </div>
                     <div className="border-2 border-red-600 bg-red-950/80 p-4 shadow-[4px_4px_0px_0px_#ba1a1a]">
                       <h3 className="pixel-text-xs mb-3 font-bold uppercase text-red-500">
-                        Illegal Blocks
+                        Tip
                       </h3>
                       <p className="pixel-text-xs leading-normal text-red-200">
-                        AD-HOMINEM, RED-HERRING
+                        Use End Debate whenever you want AI judging and feedback.
                       </p>
                     </div>
                   </div>
