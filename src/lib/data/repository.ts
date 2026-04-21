@@ -32,9 +32,21 @@ function pickArenaOpponent(): string {
   return ARENA_OPPONENTS[i] ?? ARENA_OPPONENTS[0];
 }
 
-function buildWsdaSession(topicTitle: string): DebateSession {
+function parseRequestedRole(
+  role: string | null | undefined,
+): "pro" | "con" | undefined {
+  const v = role?.trim().toLowerCase();
+  if (v === "pro" || v === "con") return v;
+  return undefined;
+}
+
+function buildWsdaSession(
+  topicTitle: string,
+  preferredRole?: "pro" | "con",
+): DebateSession {
   const first = WSDA_PHASES[0];
-  const userRole: "pro" | "con" = Math.random() < 0.5 ? "pro" : "con";
+  const userRole: "pro" | "con" =
+    preferredRole ?? (Math.random() < 0.5 ? "pro" : "con");
   return {
     ...mockDebateSession,
     id: `debate_wsda_${Date.now()}`,
@@ -93,39 +105,43 @@ export function getDebateSessionForTopic(
   topicId: string | null | undefined,
   customTitle: string | null | undefined,
   format: string | null | undefined,
+  requestedRole?: string | null | undefined,
 ): DebateSession {
   const base: DebateSession = { ...mockDebateSession };
   const id = topicId?.trim();
   const isWsda = format?.trim().toLowerCase() === "wsda";
+  const selectedRole = parseRequestedRole(requestedRole);
 
   if (id === "custom") {
     const t = customTitle?.trim();
     const title = t || "Custom topic";
     if (isWsda) {
-      return buildWsdaSession(title);
+      return buildWsdaSession(title, selectedRole);
     }
     return {
       ...base,
       topicTitle: title,
+      userRole: selectedRole ?? base.userRole,
     };
   }
 
   if (!id) {
-    return base;
+    return { ...base, userRole: selectedRole ?? base.userRole };
   }
 
   const topic = mockTopics.find((t) => t.id === id);
   if (!topic) {
-    return base;
+    return { ...base, userRole: selectedRole ?? base.userRole };
   }
 
   if (isWsda) {
-    return buildWsdaSession(topic.description);
+    return buildWsdaSession(topic.description, selectedRole);
   }
 
   return {
     ...base,
     topicTitle: topic.description,
+    userRole: selectedRole ?? base.userRole,
   };
 }
 

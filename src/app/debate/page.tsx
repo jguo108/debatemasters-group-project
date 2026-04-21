@@ -35,6 +35,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
   const roomParam = firstParam(sp.room);
   const topicParam = firstParam(sp.topic);
   const formatParam = firstParam(sp.format);
+  const roleParam = firstParam(sp.role);
 
   let session: DebateSession;
   if (roomParam?.trim()) {
@@ -56,6 +57,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
       topicParam,
       firstParam(sp.title),
       formatParam,
+      roleParam,
     );
   }
   const isWsda = session.debateFormat === "wsda";
