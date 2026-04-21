@@ -1,0 +1,63 @@
+﻿import { NextResponse } from "next/server";
+import type { DebateTranscriptEntry } from "@/lib/data/types";
+import { generateOpponentReply } from "@/lib/llm/tasks";
+
+type OpponentReplyBody = {
+  topicTitle?: unknown;
+  opponentName?: unknown;
+  userRole?: unknown;
+  transcript?: unknown;
+};
+
+function normalizeTranscript(value: unknown): DebateTranscriptEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(
+      (entry) =>
+        entry &&
+        typeof entry === "object" &&
+        typeof (entry as Record<string, unknown>).speaker === "string" &&
+        typeof (entry as Record<string, unknown>).text === "string" &&
+        typeof (entry as Record<string, unknown>).at === "string",
+    )
+    .map((entry) => ({
+      speaker: String((entry as Record<string, unknown>).speaker),
+      text: String((entry as Record<string, unknown>).text),
+      at: String((entry as Record<string, unknown>).at),
+    }));
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as OpponentReplyBody;
+    const topicTitle = typeof body.topicTitle === "string" ? body.topicTitle.trim() : "";
+    const opponentName =
+      typeof body.opponentName === "string" ? body.opponentName.trim() : "Opponent";
+    const userRole = body.userRole === "con" ? "con" : "pro";
+    const transcript = normalizeTranscript(body.transcript);
+
+    if (!topicTitle) {
+      return NextResponse.json(
+        { ok: false, error: "topicTitle is required." },
+        { status: 400 },
+      );
+    }
+
+    const reply = await generateOpponentReply({
+      topicTitle,
+      opponentName,
+      userRole,
+      transcript,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      reply,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to generate opponent reply.";
+    console.error("opponent-reply route failed:", message);
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}

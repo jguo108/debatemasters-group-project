@@ -31,6 +31,12 @@ type WsdaChatRow =
   | { kind: "local"; id: number; text: string; postedAt: string }
   | { kind: "opening"; entry: DebateTranscriptEntry };
 
+type SoloChatRow = {
+  id: number;
+  speaker: "you" | "opponent";
+  text: string;
+};
+
 type DebateChatPanelProps = {
   sessionId: string;
   opponentName: string;
@@ -84,20 +90,21 @@ export function DebateChatPanel({
   );
   const arenaTranscriptRef = useRef<Set<string>>(new Set());
   const [draft, setDraft] = useState("");
+  const [soloChatRows, setSoloChatRows] = useState<SoloChatRow[]>([]);
+  const [soloAwaitingReply, setSoloAwaitingReply] = useState(false);
+  const [soloUsedFallback, setSoloUsedFallback] = useState(false);
+  const [soloFallbackReason, setSoloFallbackReason] = useState<string | null>(null);
   const [userPosts, setUserPosts] = useState<
     { id: number; text: string; postedAt: string }[]
   >([]);
   /** System lines must live in React state so the chat re-renders (ref-only transcript did not). */
   const [wsdaSystemFeed, setWsdaSystemFeed] = useState<DebateTranscriptEntry[]>([]);
-  /** Pro constructive line (offline WSDA) — merged into the local timeline by `at` order. */
-  const [wsdaOpeningLine, setWsdaOpeningLine] = useState<DebateTranscriptEntry | null>(
-    null,
-  );
   const [simConPosts, setSimConPosts] = useState<
     { id: number; text: string; phaseIndex: number }[]
   >([]);
   const transcriptRef = useRef<DebateTranscriptEntry[]>([]);
   const postIdRef = useRef(0);
+  const soloRowIdRef = useRef(0);
   const simPostIdRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initializedTranscriptRef = useRef(false);
@@ -141,6 +148,63 @@ export function DebateChatPanel({
     [debateFormat, setTranscriptEntries],
   );
 
+  const requestSoloOpponentReply = useCallback(
+    async (transcript: DebateTranscriptEntry[]) => {
+      const fallbacks = [
+        "Your claim assumes intent matters more than outcomes, but policy is judged by impact first.",
+        "You frame risk well, yet you still need a practical mechanism that scales beyond ideal cases.",
+        "I disagree: your standard values caution, but it underestimates the cost of delaying progress.",
+        "That argument is principled, but it dodges the tradeoff between fairness, speed, and access.",
+      ];
+      const lastUserLine =
+        [...transcript].reverse().find((entry) => entry.speaker.includes("(You)"))?.text?.slice(
+          0,
+          120,
+        ) ?? "";
+      const fallback = `${fallbacks[Math.floor(Math.random() * fallbacks.length)]}${
+        lastUserLine ? ` You said: "${lastUserLine}".` : ""
+      }`;
+      try {
+        const res = await fetch("/api/ai/opponent-reply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topicTitle: topicTitle?.trim() || phaseLabel,
+            opponentName,
+            userRole,
+            transcript,
+          }),
+        });
+        const data = (await res.json()) as {
+          ok?: boolean;
+          reply?: string;
+          error?: string;
+        };
+        if (!res.ok || !data.ok || typeof data.reply !== "string" || !data.reply.trim()) {
+          console.warn("opponent-reply failed:", data.error ?? "unknown error");
+          return {
+            reply: fallback,
+            usedFallback: true,
+            reason: data.error ?? "Model response invalid.",
+          };
+        }
+        return {
+          reply: data.reply.trim(),
+          usedFallback: false,
+          reason: null,
+        };
+      } catch (error) {
+        console.warn("opponent-reply request threw:", error);
+        return {
+          reply: fallback,
+          usedFallback: true,
+          reason: error instanceof Error ? error.message : "Network failure.",
+        };
+      }
+    },
+    [opponentName, phaseLabel, topicTitle, userRole],
+  );
+
   useEffect(() => {
     if (initializedTranscriptRef.current) return;
     initializedTranscriptRef.current = true;
@@ -173,35 +237,22 @@ export function DebateChatPanel({
           at: at(2),
         };
         initial.push(opening);
-        setWsdaOpeningLine(opening);
       }
       setTranscriptEntries(initial);
       setWsdaSystemFeed(initial.filter((e) => e.speaker === "System"));
       return;
     }
 
-    setTranscriptEntries([
+    const initialTranscript: DebateTranscriptEntry[] = [
       {
         speaker: "System",
         text: `Debate opened: ${topicTitle?.trim() || phaseLabel}`,
         at: now,
       },
-      {
-        speaker: opponentName,
-        text: "Automation is the inevitable bedrock of progress. Every tool we've crafted-from the shovel to the piston-has served structural efficiency.",
-        at: now,
-      },
-      {
-        speaker: `${youDisplayName} (You)`,
-        text: "But tools don't design the building. If we outsource 'why' to an algorithm, we aren't building-we're spectating.",
-        at: now,
-      },
-      {
-        speaker: "System",
-        text: phaseLabel,
-        at: now,
-      },
-    ]);
+    ];
+    setTranscriptEntries(initialTranscript);
+    soloRowIdRef.current = 0;
+    setSoloChatRows([]);
   }, [
     appendTranscriptEntry,
     isWsda,
@@ -327,9 +378,6 @@ export function DebateChatPanel({
         text: e.text,
       });
     }
-    if (wsdaOpeningLine) {
-      rows.push({ kind: "opening", entry: wsdaOpeningLine });
-    }
     for (const p of userPosts) {
       rows.push({
         kind: "local",
@@ -360,7 +408,7 @@ export function DebateChatPanel({
       return 1;
     });
     return rows;
-  }, [isWsda, arenaRoomId, wsdaSystemFeed, wsdaOpeningLine, userPosts]);
+  }, [isWsda, arenaRoomId, wsdaSystemFeed, userPosts]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -369,6 +417,8 @@ export function DebateChatPanel({
     });
   }, [
     userPosts.length,
+    soloChatRows.length,
+    soloAwaitingReply,
     arenaMessages.length,
     visibleSimConPosts.length,
     phaseIndex,
@@ -380,7 +430,7 @@ export function DebateChatPanel({
 
   const youRoleTag = userRole === "pro" ? "Pro" : "Con";
   const opponentRoleTag = userRole === "pro" ? "Con" : "Pro";
-  const inputLocked = roundComplete || !userCanPost;
+  const inputLocked = roundComplete || !userCanPost || (!isWsda && soloAwaitingReply);
 
   useEffect(() => {
     arenaTranscriptRef.current.clear();
@@ -426,23 +476,54 @@ export function DebateChatPanel({
       return;
     }
 
-    postIdRef.current += 1;
     const postedAt = new Date().toISOString();
-    setUserPosts((prev) => [
-      ...prev,
-      { id: postIdRef.current, text, postedAt },
-    ]);
+    if (isWsda) {
+      postIdRef.current += 1;
+      setUserPosts((prev) => [
+        ...prev,
+        { id: postIdRef.current, text, postedAt },
+      ]);
+    } else {
+      soloRowIdRef.current += 1;
+      const rowId = soloRowIdRef.current;
+      setSoloChatRows((prev) => [...prev, { id: rowId, speaker: "you", text }]);
+    }
     appendTranscriptEntry({
       speaker: isWsda ? `You (${youRoleTag})` : `${youDisplayName} (You)`,
       text,
       at: postedAt,
     });
     setDraft("");
+    if (!isWsda) {
+      setSoloUsedFallback(false);
+      setSoloFallbackReason(null);
+      setSoloAwaitingReply(true);
+      void (async () => {
+        const result = await requestSoloOpponentReply(transcriptRef.current);
+        const at = new Date().toISOString();
+        soloRowIdRef.current += 1;
+        const rowId = soloRowIdRef.current;
+        setSoloUsedFallback(result.usedFallback);
+        setSoloFallbackReason(result.reason);
+        setSoloChatRows((prev) => [
+          ...prev,
+          { id: rowId, speaker: "opponent", text: result.reply },
+        ]);
+        appendTranscriptEntry({
+          speaker: opponentName,
+          text: result.reply,
+          at,
+        });
+        setSoloAwaitingReply(false);
+      })();
+    }
   }
 
   const footerHint =
     roundComplete
       ? "Round complete. Use End to leave or review results."
+      : !isWsda && soloAwaitingReply
+        ? "Opponent is responding..."
       : inputLocked
         ? inputDisabledHint ??
           "You cannot type during this segment."
@@ -467,55 +548,59 @@ export function DebateChatPanel({
         ref={scrollRef}
         className="pixel-bg-grid relative max-h-[min(700px,55vh)] flex-1 space-y-10 overflow-y-auto p-4 md:p-6"
       >
-        {!isWsda ? (
-          <>
-            <div className="flex items-start gap-4">
-              <div className="h-12 w-12 flex-shrink-0 border-4 border-red-600 bg-red-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14">
-                <img
-                  alt=""
-                  className="h-full w-full object-cover"
-                  src={opponentAvatarUrl}
-                />
-              </div>
-              <div className="max-w-[85%] border-2 border-red-900/50 bg-black/80 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5">
-                <span className="pixel-text-xs mb-3 block font-bold uppercase text-orange-400">
-                  {opponentName}
-                </span>
-                <p className="pixel-text-xs leading-loose text-stone-200">
-                  Automation is the inevitable bedrock of progress. Every tool we&apos;ve
-                  crafted—from the shovel to the piston—has served structural efficiency.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-row-reverse items-start gap-4">
-              <div className="h-12 w-12 flex-shrink-0 border-4 border-red-500 bg-primary shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14">
-                <img
-                  alt=""
-                  className="h-full w-full object-cover"
-                  src={yourAvatarUrl}
-                />
-              </div>
-              <div className="max-w-[85%] border-2 border-on-primary-fixed-variant bg-primary-fixed/90 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5">
-                <span className="pixel-text-xs mb-3 block text-right font-bold uppercase text-on-primary-fixed-variant">
-                  {youDisplayName} (You)
-                </span>
-                <p className="pixel-text-xs leading-loose text-on-primary-container">
-                  But tools don&apos;t design the building. If we outsource &apos;why&apos; to an
-                  algorithm, we aren&apos;t building—we&apos;re spectating.
-                </p>
-              </div>
-            </div>
-          </>
-        ) : null}
-
-        {!isWsda ? (
-          <div className="flex justify-center">
-            <div className="border-2 border-orange-600 bg-orange-950/90 px-4 py-2 pixel-text-xs font-bold uppercase tracking-widest text-orange-400 shadow-lg md:px-6">
-              System: {phaseLabel}
-            </div>
-          </div>
-        ) : null}
+        {!isWsda
+          ? soloChatRows.map((row) => {
+              const isSelf = row.speaker === "you";
+              return (
+                <div
+                  key={row.id}
+                  className={
+                    isSelf
+                      ? "flex flex-row-reverse items-start gap-4"
+                      : "flex items-start gap-4"
+                  }
+                >
+                  <div
+                    className={`h-12 w-12 flex-shrink-0 border-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14 ${
+                      isSelf
+                        ? "border-red-500 bg-primary"
+                        : "border-red-600 bg-red-900"
+                    }`}
+                  >
+                    <img
+                      alt=""
+                      className="h-full w-full object-cover"
+                      src={isSelf ? yourAvatarUrl : opponentAvatarUrl}
+                    />
+                  </div>
+                  <div
+                    className={`max-w-[85%] border-2 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5 ${
+                      isSelf
+                        ? "border-on-primary-fixed-variant bg-primary-fixed/90"
+                        : "border-red-900/50 bg-black/80"
+                    }`}
+                  >
+                    <span
+                      className={`pixel-text-xs mb-3 block font-bold uppercase ${
+                        isSelf
+                          ? "text-right text-on-primary-fixed-variant"
+                          : "text-orange-400"
+                      }`}
+                    >
+                      {isSelf ? `${youDisplayName} (You)` : opponentName}
+                    </span>
+                    <p
+                      className={`pixel-text-xs leading-loose whitespace-pre-wrap ${
+                        isSelf ? "text-on-primary-container" : "text-stone-200"
+                      }`}
+                    >
+                      {row.text}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          : null}
 
         {isWsda && roundComplete ? (
           <div className="flex justify-center">
@@ -694,28 +779,6 @@ export function DebateChatPanel({
             })
           : null}
 
-        {!isWsda
-          ? userPosts.map(({ id, text }) => (
-              <div key={id} className="flex flex-row-reverse items-start gap-4">
-                <div className="h-12 w-12 flex-shrink-0 border-4 border-red-500 bg-primary shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14">
-                  <img
-                    alt=""
-                    className="h-full w-full object-cover"
-                    src={yourAvatarUrl}
-                  />
-                </div>
-                <div className="max-w-[85%] border-2 border-on-primary-fixed-variant bg-primary-fixed/90 p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.3)] backdrop-blur-md md:p-5">
-                  <span className="pixel-text-xs mb-3 block text-right font-bold uppercase text-on-primary-fixed-variant">
-                    {`${youDisplayName} (You)`}
-                  </span>
-                  <p className="pixel-text-xs leading-loose text-on-primary-container whitespace-pre-wrap">
-                    {text}
-                  </p>
-                </div>
-              </div>
-            ))
-          : null}
-
         {visibleSimConPosts.map(({ id, text }) => (
           <div key={id} className="flex items-start gap-4">
             <div className="h-12 w-12 flex-shrink-0 border-4 border-tertiary bg-tertiary/80 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] md:h-14 md:w-14">
@@ -750,8 +813,18 @@ export function DebateChatPanel({
                   : userCanPost && !roundComplete
                     ? "Your side may speak — stay within the rules for this phase."
                     : inputDisabledHint ?? "Wait for your turn."
-            : "Mining response..."}
+            : soloAwaitingReply
+              ? "Opponent is drafting a rebuttal..."
+              : "Ready for your next argument."}
         </div>
+        {!isWsda && soloUsedFallback ? (
+          <div
+            className="ml-4 mt-2 inline-flex items-center border border-orange-700 bg-orange-950/60 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-orange-300 md:ml-16"
+            title={soloFallbackReason ?? "AI reply fallback used"}
+          >
+            AI unavailable - using backup response. Retrying next turn.
+          </div>
+        ) : null}
       </div>
 
       <div className="border-t-8 border-orange-600 bg-red-950 p-4 shadow-[0_-10px_20px_rgba(255,69,0,0.2)] md:p-6">

@@ -16,6 +16,7 @@ import {
   appendDebateResultToHistory,
   createOpponentVictoryByForfeitResult,
 } from "@/lib/data/history-storage";
+import { finalizeDebateWithAi } from "@/lib/data/debate-finalize";
 import { wsdaStateFromElapsedSeconds } from "@/lib/debate/wsda-elapsed";
 import {
   WSDA_PHASES,
@@ -230,7 +231,9 @@ export function WsdaDebateProvider({
   const [opponentWinResultId, setOpponentWinResultId] = useState<string | null>(
     null,
   );
+  const [aiResultId, setAiResultId] = useState<string | null>(null);
   const opponentForfeitHandledRef = useRef(false);
+  const aiFinalizeStartedRef = useRef(false);
 
   useEffect(() => {
     const roomId = session.arenaRoomId;
@@ -312,6 +315,44 @@ export function WsdaDebateProvider({
   ]);
 
   const { phaseIndex, secondsLeft, isComplete } = useWsdaClock(session);
+
+  useEffect(() => {
+    if (!isComplete) return;
+    if (opponentForfeitHandledRef.current) return;
+    if (aiFinalizeStartedRef.current) return;
+    if (aiResultId) return;
+    aiFinalizeStartedRef.current = true;
+    void (async () => {
+      const judged = await finalizeDebateWithAi({
+        sessionId: session.id,
+        topicTitle: session.topicTitle,
+        opponentName: session.opponentName,
+        userRole: session.userRole,
+        debateFormat: session.debateFormat,
+        arenaRoomId: session.arenaRoomId,
+      });
+      if (judged.ok) {
+        setAiResultId(judged.resultId);
+        return;
+      }
+      aiFinalizeStartedRef.current = false;
+      console.warn("WSDA AI finalize failed:", judged.error);
+    })();
+  }, [
+    aiResultId,
+    isComplete,
+    session.arenaRoomId,
+    session.debateFormat,
+    session.id,
+    session.opponentName,
+    session.topicTitle,
+    session.userRole,
+  ]);
+
+  useEffect(() => {
+    if (!aiResultId) return;
+    router.push(`/results/${encodeURIComponent(aiResultId)}`);
+  }, [aiResultId, router]);
 
   const phase = WSDA_PHASES[phaseIndex];
 

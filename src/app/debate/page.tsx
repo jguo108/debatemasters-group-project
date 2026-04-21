@@ -357,6 +357,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                     className="inline-flex w-full items-center justify-center border-b-4 border-orange-900 bg-orange-600 px-4 py-3 text-white pixel-text-xs font-black uppercase shadow-[4px_4px_0px_0px_#451a03] transition-all hover:bg-orange-500 active:translate-y-1 active:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
                     ariaLabel="End debate now"
                     modalRootId="debate-chat-area"
+                    resolveWithJudge
                   >
                     End Debate
                   </ForfeitEndButton>
