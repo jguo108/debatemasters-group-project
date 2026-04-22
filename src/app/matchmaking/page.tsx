@@ -173,8 +173,10 @@ function MatchmakingPageContent() {
     }
 
     async function tick() {
+      const ageBand = getAgeBandPreference();
       const { data, error } = await supabase.rpc("arena_request_match", {
         p_format: selectedFormat,
+        p_age_band: ageBand,
       });
       if (cancelled) return;
       if (error) {
