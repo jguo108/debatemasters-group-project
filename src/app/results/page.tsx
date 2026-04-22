@@ -82,9 +82,6 @@ export default function ResultsPage() {
                   <h2 className="mt-1 text-base font-bold uppercase leading-snug tracking-wide text-white group-hover:text-primary-fixed md:text-lg">
                     {d.topicTitle}
                   </h2>
-                  <p className="mt-1 truncate text-xs font-medium uppercase tracking-wide text-stone-400">
-                    {d.headline} — {d.subline}
-                  </p>
                 </div>
                 <div className="flex min-w-[9.5rem] shrink-0 items-center justify-end gap-4">
                   <span

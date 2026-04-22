@@ -7,18 +7,6 @@ import { DebateResultDetail } from "@/components/results/DebateResultDetail";
 import { MaterialIcon } from "@/components/MaterialIcon";
 import { useCombinedDebateHistory } from "@/lib/data/history-storage";
 
-function formatDebateWhen(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "UTC",
-    });
-  } catch {
-    return iso;
-  }
-}
-
 export default function DebateHistoryDetailPage() {
   const params = useParams<{ debateId: string }>();
   const debateId = typeof params?.debateId === "string" ? params.debateId : "";
@@ -62,8 +50,6 @@ export default function DebateHistoryDetailPage() {
     );
   }
 
-  const dateLabel = formatDebateWhen(r.debatedAt);
-
   return (
     <>
       <div className="relative z-20 mx-auto max-w-5xl px-6 pt-8 md:px-12 md:pt-10">
@@ -74,9 +60,6 @@ export default function DebateHistoryDetailPage() {
           <MaterialIcon name="arrow_back" className="text-lg text-[#58B13E]" />
           DEBATE HISTORY
         </Link>
-        <p className="mt-4 text-xs font-medium uppercase tracking-wide text-stone-500">
-          {dateLabel}
-        </p>
       </div>
       <DebateResultDetail r={r} />
     </>

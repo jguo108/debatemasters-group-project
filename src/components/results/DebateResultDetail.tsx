@@ -1,4 +1,7 @@
-﻿import { MaterialIcon } from "@/components/MaterialIcon";
+﻿"use client";
+
+import { MaterialIcon } from "@/components/MaterialIcon";
+import { downloadDebateTranscriptPdf } from "@/lib/pdf/transcript-pdf";
 import type { DebateResult } from "@/lib/data/types";
 
 const sans =
@@ -6,18 +9,6 @@ const sans =
 
 const headlineTitleClass =
   "brick-sans text-3xl font-black uppercase leading-none tracking-tighter text-white drop-shadow-[4px_4px_0px_rgba(0,0,0,0.8)] md:text-5xl";
-
-function formatTranscriptTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "UTC",
-    });
-  } catch {
-    return iso;
-  }
-}
 
 function ResultHeadline({ headline }: { headline: string }) {
   const words = headline.trim().split(/\s+/);
@@ -39,10 +30,7 @@ export function DebateResultDetail({ r }: { r: DebateResult }) {
     <div className={`relative z-20 mx-auto max-w-5xl p-8 md:p-12 ${sans}`}>
       <div className="mb-12 text-center">
         <ResultHeadline headline={r.headline} />
-        <p className="mt-4 text-base font-semibold uppercase tracking-wide text-orange-500 md:text-lg">
-          {r.subline}
-        </p>
-        <p className="mt-3 text-sm font-medium uppercase tracking-wide text-stone-400">
+        <p className="mt-4 text-sm font-medium uppercase tracking-wide text-stone-400 md:mt-6">
           {r.topicTitle}
         </p>
       </div>
@@ -173,26 +161,15 @@ export function DebateResultDetail({ r }: { r: DebateResult }) {
           <MaterialIcon name="history_edu" />
           Full transcript
         </h3>
-        <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
-          {r.transcript.map((entry, index) => (
-            <div
-              key={`${r.id}-transcript-${index}-${entry.at}`}
-              className="border border-stone-700 bg-stone-900/70 p-3"
-            >
-              <div className="mb-1 flex items-center justify-between gap-3">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-orange-300">
-                  {entry.speaker}
-                </span>
-                <span className="text-[10px] font-medium uppercase tracking-wide text-stone-500">
-                  {formatTranscriptTime(entry.at)}
-                </span>
-              </div>
-              <p className="text-xs leading-relaxed text-stone-200 whitespace-pre-wrap">
-                {entry.text}
-              </p>
-            </div>
-          ))}
-        </div>
+        <button
+          type="button"
+          onClick={() => downloadDebateTranscriptPdf(r)}
+          disabled={r.transcript.length === 0}
+          className="brick-sans inline-flex items-center gap-2 border-b-4 border-r-4 border-black bg-[#2D1B19] px-5 py-3 font-black uppercase tracking-widest text-[#58B13E] transition-all hover:bg-[#3a2824] hover:brightness-110 active:translate-y-1 active:border-0 disabled:pointer-events-none disabled:opacity-40"
+        >
+          <MaterialIcon name="download" className="text-lg text-[#58B13E]" />
+          Download transcript (PDF)
+        </button>
       </section>
 
     </div>
