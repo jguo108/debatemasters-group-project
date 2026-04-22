@@ -46,6 +46,28 @@ function normalizeTranscript(value: unknown): DebateTranscriptEntry[] {
     }));
 }
 
+function hasSufficientDebateContent(transcript: DebateTranscriptEntry[]): boolean {
+  const debaterMessages = transcript.filter((entry) => {
+    const speaker = entry.speaker.trim().toLowerCase();
+    if (speaker === "system") return false;
+    return entry.text.trim().length >= 16;
+  });
+  return debaterMessages.length >= 2;
+}
+
+function lowContentFallbackFeedback(ageBand: AgeBand): string {
+  if (ageBand === "under10") {
+    return "Time ended before both sides shared enough ideas to judge the round fairly. Next time, try adding at least one clear reason and one example.";
+  }
+  if (ageBand === "10-14") {
+    return "The timer ended before enough arguments were exchanged for detailed judging. Next round, make sure both sides share clear claims and at least one supporting example.";
+  }
+  if (ageBand === "15-18") {
+    return "The round ended without enough substantive arguments for detailed adjudication. In the next round, each side should present clear warrants and comparative impacts.";
+  }
+  return "The round concluded without enough substantive clash for detailed adjudication. In the next round, both sides should provide developed claims, warrants, and impact comparison.";
+}
+
 async function persistArenaJudgement(input: {
   arenaRoomId: string;
   topicTitle: string;
@@ -147,6 +169,7 @@ export async function POST(request: Request) {
     const arenaRoomId =
       typeof body.arenaRoomId === "string" ? body.arenaRoomId.trim() : "";
     const transcript = normalizeTranscript(body.transcript);
+    const hasEnoughContent = hasSufficientDebateContent(transcript);
 
     if (!sessionId || !topicTitle) {
       return NextResponse.json(
@@ -161,7 +184,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const [judgementForPro, judgementForCon] = await Promise.all([
+    let [judgementForPro, judgementForCon] = await Promise.all([
       judgeDebateAndFeedback({
         topicTitle,
         debateFormat,
@@ -177,6 +200,28 @@ export async function POST(request: Request) {
         transcript,
       }),
     ]);
+
+    if (!hasEnoughContent) {
+      const sharedFeedback = lowContentFallbackFeedback(ageBand);
+      const sharedQuote =
+        ageBand === "under10"
+          ? "Short, clear reasons help judges understand your side."
+          : "Clear claims plus evidence create judgeable rounds.";
+      judgementForPro = {
+        ...judgementForPro,
+        rationale: "Insufficient substantive debate content for full rationale.",
+        feedback: sharedFeedback,
+        quote: sharedQuote,
+        scores: { clarity: 1.5, evidence: 1.5 },
+      };
+      judgementForCon = {
+        ...judgementForCon,
+        rationale: "Insufficient substantive debate content for full rationale.",
+        feedback: sharedFeedback,
+        quote: sharedQuote,
+        scores: { clarity: 1.5, evidence: 1.5 },
+      };
+    }
 
     let winner: "pro" | "con";
     let confidence: number;
