@@ -120,7 +120,7 @@ export default function LandingPage() {
         <div className="absolute bottom-10 -left-10 z-10 hidden h-32 w-64 -rotate-3 transform border-r-8 border-t-8 border-stone-800 bg-stone-900 opacity-50 lg:block" />
         <div className="absolute top-40 -right-20 z-10 hidden h-40 w-80 rotate-12 transform border-b-8 border-l-8 border-stone-900 bg-stone-950 opacity-40 lg:block" />
       </main>
-      <footer className="relative z-40 flex w-full flex-col items-center justify-between border-t-8 border-orange-950 bg-stone-950 px-12 py-12 md:flex-row">
+      <footer className="relative z-40 flex w-full flex-col items-center border-t-8 border-orange-950 bg-stone-950 px-12 py-12">
         <div className="mb-8 md:mb-0">
           <span className="pixel-text-base font-headline-pixel text-xl font-black text-stone-600">
             DEBATE MASTER
@@ -128,34 +128,6 @@ export default function LandingPage() {
           <p className="pixel-text-xs mt-2 font-body text-[10px] uppercase tracking-[0.3em] text-stone-700 font-headline-pixel">
             © 2024 DEBATE MASTER - BUILT WITH BRICKS
           </p>
-        </div>
-        <nav className="flex gap-10">
-          <a
-            href="#"
-            className="pixel-text-xs font-headline-pixel text-xs font-bold uppercase tracking-widest text-stone-500 transition-colors hover:text-orange-500"
-          >
-            Privacy Policy
-          </a>
-          <a
-            href="#"
-            className="pixel-text-xs font-headline-pixel text-xs font-bold uppercase tracking-widest text-stone-500 transition-colors hover:text-orange-500"
-          >
-            Safety Guide
-          </a>
-          <a
-            href="#"
-            className="pixel-text-xs font-headline-pixel text-xs font-bold uppercase tracking-widest text-stone-500 transition-colors hover:text-orange-500"
-          >
-            Support
-          </a>
-        </nav>
-        <div className="mt-8 flex gap-4 md:mt-0">
-          <div className="flex h-8 w-8 items-center justify-center border-2 border-stone-800 bg-stone-900">
-            <MaterialIcon name="language" className="text-sm text-stone-600" />
-          </div>
-          <div className="flex h-8 w-8 items-center justify-center border-2 border-stone-800 bg-stone-900">
-            <MaterialIcon name="forum" className="text-sm text-stone-600" />
-          </div>
         </div>
       </footer>
       <div className="fixed bottom-0 left-0 z-50 h-1 w-full bg-gradient-to-r from-transparent via-orange-600 to-transparent blur-sm" />
