@@ -21,6 +21,11 @@ export type JudgeDebateRequest = {
   transcript: DebateTranscriptEntry[];
 };
 
+export type GenerateDebateTopicRequest = {
+  debateFormat: "wsda" | "free_form";
+  ageBand?: AgeBand;
+};
+
 export type JudgeDebateOutput = {
   winner: "pro" | "con";
   confidence: number;
@@ -32,6 +37,22 @@ export type JudgeDebateOutput = {
     evidence: number;
   };
 };
+
+function sanitizeTopicLine(raw: string, format: "wsda" | "free_form"): string {
+  let value = raw.replace(/[\r\n]+/g, " ").trim();
+  value = value.replace(/^["'`]+|["'`]+$/g, "").trim();
+  if (!value) return "";
+  if (format === "wsda") {
+    if (!/^this house /i.test(value)) {
+      value = `This house believes ${value.replace(/[.?!]+$/, "")}.`;
+    } else if (!/[.?!]$/.test(value)) {
+      value = `${value}.`;
+    }
+  } else if (!/[.?!]$/.test(value)) {
+    value = `${value}?`;
+  }
+  return clampText(value, 180);
+}
 
 function clampText(value: string, maxLen: number): string {
   const v = value.trim();
@@ -154,6 +175,36 @@ export async function generateOpponentReply(
     }
     throw primaryError;
   }
+}
+
+export async function generateDebateTopic(
+  input: GenerateDebateTopicRequest,
+): Promise<string> {
+  const { provider, model } = resolveLlmTask("judge");
+  const isWsda = input.debateFormat === "wsda";
+  const response = await provider.generate({
+    model,
+    temperature: 0.9,
+    maxTokens: 90,
+    messages: [
+      {
+        role: "system",
+        content: isWsda
+          ? 'Generate one age-appropriate WSDA resolution. Return one line only in plain text. Format must start with "This house". No numbering, no quotes, no markdown.'
+          : "Generate one age-appropriate free-form debate topic as one engaging question. Return one line only in plain text. No numbering, no quotes, no markdown.",
+      },
+      {
+        role: "user",
+        content: [
+          `Format: ${isWsda ? "WSDA" : "Free Form"}`,
+          ageBandToneGuide(input.ageBand),
+          "Keep it safe for school settings and avoid explicit, hateful, or self-harm content.",
+          "Use clear wording that the selected age group can understand.",
+        ].join("\n\n"),
+      },
+    ],
+  });
+  return sanitizeTopicLine(response.text, input.debateFormat);
 }
 
 export async function judgeDebateAndFeedback(

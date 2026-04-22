@@ -35,6 +35,33 @@ export function ArenaFreeFormTimeoutTimer({
     const supabase = createClient();
 
     void (async () => {
+      const { data: beginData, error: beginError } = await supabase.rpc(
+        "arena_begin_free_form_session",
+        {
+          p_room: roomId,
+        },
+      );
+      if (!cancelled && !beginError) {
+        const startedEpoch = Number(
+          (beginData as { free_form_started_epoch?: string | number } | null)
+            ?.free_form_started_epoch,
+        );
+        const serverNowEpoch = Number(
+          (beginData as { server_now_epoch?: string | number } | null)?.server_now_epoch,
+        );
+        if (Number.isFinite(startedEpoch) && Number.isFinite(serverNowEpoch)) {
+          setServerClock({
+            startedAtMs: startedEpoch * 1000,
+            offsetMs: serverNowEpoch * 1000 - Date.now(),
+          });
+          return;
+        }
+      }
+      if (beginError) {
+        console.warn("arena_begin_free_form_session failed, using legacy anchor:", beginError);
+      }
+
+      // Legacy fallback: in case migration has not been applied yet.
       const [{ data: room }, { data: nowData }] = await Promise.all([
         supabase
           .from("debate_rooms")
@@ -46,10 +73,8 @@ export function ArenaFreeFormTimeoutTimer({
       if (cancelled) return;
       const startedAtRaw = room?.created_at;
       const startedAtMs = startedAtRaw ? Date.parse(startedAtRaw) : Date.now();
-      const serverNowEpoch =
-        (nowData as { server_now_epoch?: number } | null)?.server_now_epoch;
-      const offsetMs =
-        typeof serverNowEpoch === "number" ? serverNowEpoch * 1000 - Date.now() : 0;
+      const serverNowEpoch = (nowData as { server_now_epoch?: number } | null)?.server_now_epoch;
+      const offsetMs = typeof serverNowEpoch === "number" ? serverNowEpoch * 1000 - Date.now() : 0;
       setServerClock({ startedAtMs, offsetMs });
     })();
 

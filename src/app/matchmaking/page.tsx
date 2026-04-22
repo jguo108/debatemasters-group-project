@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { NetherSidebarShell } from "@/components/layout/NetherSidebarShell";
 import { OnboardingSidebar } from "@/components/sidebars/OnboardingSidebar";
@@ -12,10 +12,25 @@ import {
   parseArenaMatchRpcResult,
   type ArenaDebateFormat,
 } from "@/lib/matchmaking/arena";
+import { getAgeBandPreference } from "@/lib/data/profile-storage";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
 
 const SEARCH_DURATION_MS = 60_000;
 const TICK_MS = SEARCH_DURATION_MS / 100;
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
 
 function MatchmakingPageFallback() {
   return (
@@ -43,6 +58,35 @@ function MatchmakingPageContent() {
   const [arenaAuthed, setArenaAuthed] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
   const searchStartedAt = useRef<number>(0);
+
+  const requestAiTopic = useCallback(async (input: {
+    debateFormat: ArenaDebateFormat;
+    roomId?: string;
+  }): Promise<string> => {
+    const ageBand = getAgeBandPreference();
+    try {
+      const res = await fetchWithTimeout(
+        "/api/ai/generate-topic",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            debateFormat: input.debateFormat,
+            ageBand,
+            roomId: input.roomId,
+          }),
+        },
+        3500,
+      );
+      const data = (await res.json()) as { ok?: boolean; topic?: string };
+      if (res.ok && data.ok && typeof data.topic === "string" && data.topic.trim()) {
+        return data.topic.trim();
+      }
+    } catch {
+      /* fall back below */
+    }
+    return pickRandomMatchTopic(input.debateFormat, ageBand);
+  }, []);
 
   useEffect(() => {
     if (!hasValidFormatParam) {
@@ -73,7 +117,7 @@ function MatchmakingPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [hasValidFormatParam, router, selectedFormat]);
+  }, [hasValidFormatParam, requestAiTopic, router, selectedFormat]);
 
   useEffect(() => {
     if (!hasValidFormatParam) return;
@@ -92,11 +136,13 @@ function MatchmakingPageContent() {
         intervalId = undefined;
         setMatched(true);
         navigateTimeoutId = window.setTimeout(() => {
-          const topic = pickRandomMatchTopic();
-          const format = selectedFormat;
-          router.push(
-            `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=${encodeURIComponent(format)}`,
-          );
+          void (async () => {
+            const format = selectedFormat;
+            const topic = await requestAiTopic({ debateFormat: format });
+            router.push(
+              `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=${encodeURIComponent(format)}`,
+            );
+          })();
         }, 1000);
       }
     }, TICK_MS);
@@ -120,6 +166,7 @@ function MatchmakingPageContent() {
       doneRef.current = true;
       setMatched(true);
       setPct(100);
+      void requestAiTopic({ debateFormat, roomId });
       router.push(
         `/debate?room=${encodeURIComponent(roomId)}&format=${encodeURIComponent(debateFormat)}&topic=custom`,
       );
@@ -187,7 +234,7 @@ function MatchmakingPageContent() {
       clearInterval(pollId);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [arenaAuthed, hasValidFormatParam, router, selectedFormat]);
+  }, [arenaAuthed, hasValidFormatParam, requestAiTopic, router, selectedFormat]);
 
   useEffect(() => {
     if (!hasValidFormatParam) return;
@@ -285,10 +332,12 @@ function MatchmakingPageContent() {
                   <button
                     type="button"
                     onClick={() => {
-                      const topic = pickRandomMatchTopic();
-                      router.push(
-                        `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=${encodeURIComponent(selectedFormat)}`,
-                      );
+                      void (async () => {
+                        const topic = await requestAiTopic({ debateFormat: selectedFormat });
+                        router.push(
+                          `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=${encodeURIComponent(selectedFormat)}`,
+                        );
+                      })();
                     }}
                     className="bg-[#2d0d0d] px-6 py-3 text-xs font-black uppercase text-white shadow-[6px_6px_0px_0px_rgba(0,0,0,0.9)] transition-all duration-75 hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,0.9)] hover:translate-x-[3px] hover:translate-y-[3px] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none brick-sans md:hidden"
                   >
@@ -298,10 +347,12 @@ function MatchmakingPageContent() {
                   <button
                     type="button"
                     onClick={() => {
-                      const topic = pickRandomMatchTopic();
-                      void cancelQueueAndGo(
-                        `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=${encodeURIComponent(selectedFormat)}`,
-                      );
+                      void (async () => {
+                        const topic = await requestAiTopic({ debateFormat: selectedFormat });
+                        await cancelQueueAndGo(
+                          `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=${encodeURIComponent(selectedFormat)}`,
+                        );
+                      })();
                     }}
                     className="bg-[#2d0d0d] px-6 py-3 text-xs font-black uppercase text-white shadow-[6px_6px_0px_0px_rgba(0,0,0,0.9)] transition-all duration-75 hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,0.9)] hover:translate-x-[3px] hover:translate-y-[3px] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none brick-sans md:hidden"
                   >

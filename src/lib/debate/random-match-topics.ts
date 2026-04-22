@@ -1,21 +1,80 @@
-﻿/** Resolution-style topics for arena matchmaking (random draw). */
+﻿import type { AgeBand } from "@/lib/data/types";
 
-const MATCH_TOPICS: string[] = [
-  "This house believes schools should ban smartphones during the school day.",
-  "This house believes voting should be compulsory in democratic elections.",
-  "This house believes social media does more harm than good for teenagers.",
-  "This house would prioritize climate action over short-term economic growth.",
-  "This house believes artificial intelligence in classrooms helps learning more than it hurts it.",
-  "This house would abolish standardized testing for university admissions.",
-  "This house believes remote work should be the default for desk jobs.",
-  "This house would legalize physician-assisted dying for terminally ill patients.",
-  "This house believes professional athletes should be required to speak on political issues.",
-  "This house would replace animal farming with large-scale plant-based food systems.",
-  "This house believes space exploration should be funded primarily by governments, not private companies.",
-  "This house would impose a universal basic income funded by wealth taxes.",
-];
+/** Age-banded fallback topics used when AI generation is unavailable. */
+export const AGE_BAND_FALLBACK_TOPICS: Record<AgeBand, readonly string[]> = {
+  under10: [
+    "having homework every school night",
+    "wearing school uniforms",
+    "keeping class pets in every classroom",
+    "giving students more recess time",
+    "using tablets in class every day",
+    "allowing healthy snacks during lessons",
+    "having a longer weekend and shorter school days",
+    "learning coding in primary school",
+    "planting more trees in school playgrounds",
+    "making team sports required for all students",
+  ],
+  "10-14": [
+    "banning smartphones during school hours",
+    "replacing most tests with project work",
+    "starting school later in the morning",
+    "making media literacy a required subject",
+    "requiring students to complete community service",
+    "limiting social media use for users under 16",
+    "providing free public transport for students",
+    "making coding a core middle school subject",
+    "banning fast fashion ads aimed at teens",
+    "reducing homework to improve student wellbeing",
+  ],
+  "15-18": [
+    "making voting mandatory at age 18",
+    "replacing standardized tests in university admissions",
+    "requiring AI disclosure labels on online content",
+    "phasing out fossil fuel subsidies within ten years",
+    "making internships a graduation requirement",
+    "setting strict limits on targeted ads to minors",
+    "requiring social media companies to verify user age",
+    "prioritizing public transit over private car expansion",
+    "making climate education mandatory across all high schools",
+    "requiring schools to teach financial literacy as a core course",
+  ],
+  "18+": [
+    "implementing universal basic income funded by wealth taxes",
+    "mandating transparent AI audits for high-impact systems",
+    "making voting compulsory in democratic elections",
+    "adopting a four-day workweek as the default model",
+    "taxing carbon-intensive products at the point of sale",
+    "expanding nuclear energy to meet climate targets",
+    "banning facial recognition in public surveillance",
+    "requiring gig economy platforms to provide full worker benefits",
+    "limiting political microtargeting in digital campaigns",
+    "prioritizing housing-first policy over short-term shelter expansion",
+  ],
+};
 
-export function pickRandomMatchTopic(): string {
-  const i = Math.floor(Math.random() * MATCH_TOPICS.length);
-  return MATCH_TOPICS[i] ?? MATCH_TOPICS[0];
+function normalizeAgeBand(ageBand: AgeBand | undefined): AgeBand {
+  return ageBand === "under10" ||
+    ageBand === "10-14" ||
+    ageBand === "15-18" ||
+    ageBand === "18+"
+    ? ageBand
+    : "10-14";
+}
+
+function renderTopicForFormat(baseTopic: string, format: "wsda" | "free_form"): string {
+  if (format === "wsda") {
+    return `This house believes ${baseTopic}.`;
+  }
+  return `Should we support ${baseTopic}?`;
+}
+
+export function pickRandomMatchTopic(
+  format: "wsda" | "free_form" = "wsda",
+  ageBand?: AgeBand,
+): string {
+  const band = normalizeAgeBand(ageBand);
+  const source = AGE_BAND_FALLBACK_TOPICS[band];
+  const i = Math.floor(Math.random() * source.length);
+  const picked = source[i] ?? source[0];
+  return renderTopicForFormat(picked, format);
 }
