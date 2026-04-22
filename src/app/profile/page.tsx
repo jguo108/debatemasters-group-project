@@ -55,10 +55,10 @@ export default function ProfilePage() {
         <main className="relative z-10 mx-auto max-w-4xl px-6 py-10 md:px-10 md:py-14">
           <Link
             href="/onboarding"
-            className="brick-sans mb-6 inline-flex items-center gap-2 border-b-4 border-r-4 border-stone-800 bg-stone-700 px-6 py-3 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-stone-600 active:translate-y-1 active:border-0"
+            className="brick-sans mb-8 inline-flex items-center gap-2 border-b-4 border-r-4 border-black bg-[#2D1B19] px-4 py-3 font-black uppercase tracking-widest text-[#58B13E] transition-all hover:bg-[#3a2824] hover:brightness-110 active:translate-y-1 active:border-0"
           >
-            <MaterialIcon name="arrow_back" className="text-base" />
-            Back
+            <MaterialIcon name="arrow_back" className="text-lg text-[#58B13E]" />
+            BACK
           </Link>
 
           <section className="mb-8 grid gap-4 border-4 border-stone-800 bg-black/70 p-5 shadow-[8px_8px_0_0_rgba(0,0,0,0.75)] md:grid-cols-[7rem_1fr] md:p-6">
