@@ -15,5 +15,9 @@ export function createClient() {
       "Supabase client not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
     );
   }
-  return createSupabaseBrowserClient(url, key);
+  return createSupabaseBrowserClient(url, key, {
+    auth: {
+      flowType: "implicit",
+    },
+  });
 }

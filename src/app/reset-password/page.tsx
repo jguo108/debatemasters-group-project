@@ -17,6 +17,11 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     async function initializeRecoverySession() {
       let setupError: string | null = null;
+      const initialQuery = new URLSearchParams(window.location.search);
+      const initialError = initialQuery.get("error");
+      if (initialError) {
+        setError(initialError);
+      }
       if (!isSupabaseConfigured()) {
         setError("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
         setReady(true);

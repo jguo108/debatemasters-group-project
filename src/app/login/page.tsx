@@ -78,7 +78,7 @@ export default function LoginPage() {
         configuredAppUrl && configuredAppUrl.length > 0
           ? configuredAppUrl.replace(/\/+$/, "")
           : window.location.origin;
-      const redirectTo = `${appBaseUrl}/reset-password`;
+      const redirectTo = `${appBaseUrl}/auth/confirm?next=/reset-password`;
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
         redirectTo,
       });
