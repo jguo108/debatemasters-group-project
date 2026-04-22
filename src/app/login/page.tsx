@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -90,8 +90,8 @@ export default function LoginPage() {
                 "url('https://www.transparenttextures.com/patterns/dark-matter.png')",
             }}
           >
-            <div className="flex items-start gap-6">
-              <div className="group relative h-32 w-32 flex-shrink-0 border-4 border-stone-950 bg-stone-800">
+            <div className="flex flex-col items-stretch gap-6 md:flex-row md:items-start">
+              <div className="group relative mx-auto h-32 w-32 flex-shrink-0 border-4 border-stone-950 bg-stone-800 md:mx-0">
                 <img
                   alt=""
                   className="h-full w-full object-cover brightness-75 grayscale transition-all duration-300 group-hover:grayscale-0"
@@ -102,7 +102,7 @@ export default function LoginPage() {
                   <MaterialIcon name="verified" className="block text-sm" />
                 </div>
               </div>
-              <div className="flex-grow space-y-4">
+              <div className="w-full space-y-4 md:flex-grow">
                 <div className="space-y-2">
                   <label
                     htmlFor="login-email"

@@ -2,13 +2,20 @@
 
 import { MaterialIcon } from "./MaterialIcon";
 
-export function MobileMenuButton({ onOpen }: { onOpen: () => void }) {
+export function MobileMenuButton({
+  open,
+  onToggle,
+}: {
+  open: boolean;
+  onToggle: () => void;
+}) {
   return (
     <button
       type="button"
-      onClick={onOpen}
-      className="md:hidden fixed left-4 top-4 z-[60] flex h-12 w-12 items-center justify-center border-4 border-stone-800 bg-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.6)]"
-      aria-label="Open menu"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="md:hidden fixed right-4 top-4 z-[60] flex h-12 w-12 items-center justify-center border-4 border-stone-800 bg-black text-white shadow-[-4px_4px_0px_0px_rgba(0,0,0,0.6)]"
+      aria-label={open ? "Close menu" : "Open menu"}
     >
       <MaterialIcon name="menu" />
     </button>
