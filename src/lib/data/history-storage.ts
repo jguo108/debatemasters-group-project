@@ -291,11 +291,35 @@ export async function removeDebateResultFromHistory(id: string): Promise<DebateR
       data: { session },
     } = await supabase.auth.getSession();
     if (session?.user) {
-      await supabase
+      const { data: row } = await supabase
         .from("debate_results")
-        .update({ hidden: true })
+        .select("arena_room_id")
         .eq("id", id)
-        .eq("user_id", session.user.id);
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      const arenaRoomId = row?.arena_room_id as string | null | undefined;
+
+      if (arenaRoomId) {
+        const { error } = await supabase
+          .from("debate_results")
+          .update({ hidden: true })
+          .eq("id", id)
+          .eq("user_id", session.user.id);
+        if (error) {
+          console.warn("removeDebateResultFromHistory (arena hide):", error.message);
+        }
+      } else {
+        const { error } = await supabase
+          .from("debate_results")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", session.user.id);
+        if (error) {
+          console.warn("removeDebateResultFromHistory (solo delete):", error.message);
+        }
+      }
+
       if (supabaseHistoryRows) {
         supabaseHistoryRows = supabaseHistoryRows.filter((r) => r.id !== id);
       }

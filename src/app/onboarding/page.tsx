@@ -12,11 +12,18 @@ import {
 } from "@/lib/data/profile-storage";
 
 export default function OnboardingPage() {
-  const [age, setAge] = useState<AgeBand>(() => getAgeBandPreference());
+  const [age, setAge] = useState<AgeBand>("10-14");
+  const [agePreferenceLoaded, setAgePreferenceLoaded] = useState(false);
 
   useEffect(() => {
+    setAge(getAgeBandPreference());
+    setAgePreferenceLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!agePreferenceLoaded) return;
     setAgeBandPreference(age);
-  }, [age]);
+  }, [age, agePreferenceLoaded]);
 
   return (
     <div className="theme-nether-dark selection:bg-[#58B13E] selection:text-black relative min-h-screen overflow-x-hidden bg-[#1A0806] font-[family-name:var(--font-inter)] text-white nether-bg-onboarding">

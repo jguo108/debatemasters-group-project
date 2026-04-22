@@ -233,7 +233,7 @@ export function getUserProfileSnapshot(): UserProfile {
   }
 
   const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-  if (raw === cachedStorageRaw && cachedStorageRaw !== null) {
+  if (raw === cachedStorageRaw) {
     return cachedProfileSnapshot;
   }
 
