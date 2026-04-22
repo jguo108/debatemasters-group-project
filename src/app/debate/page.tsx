@@ -1,7 +1,7 @@
 ﻿import { DebateChatPanel } from "@/components/DebateChatPanel";
-import { DebateRoomTimer } from "@/components/DebateRoomTimer";
 import { DebateRoleMatchupStrip } from "@/components/debate/DebateRoleMatchupStrip";
 import { ForfeitEndButton } from "@/components/debate/ForfeitEndButton";
+import { ArenaFreeFormTimeoutTimer } from "@/components/debate/ArenaFreeFormTimeoutTimer";
 import { SoloDebateTimeoutTimer } from "@/components/debate/SoloDebateTimeoutTimer";
 import { WsdaDebateRoom } from "@/components/WsdaDebateRoom";
 import { WsdaDebateProvider } from "@/components/wsda/WsdaDebateProvider";
@@ -18,6 +18,7 @@ import {
 import { loadArenaDebateSession } from "@/lib/data/arena-room-server";
 import { getDebateSessionForTopic } from "@/lib/data/repository";
 import type { DebateSession } from "@/lib/data/types";
+import { normalizeArenaDebateFormat } from "@/lib/matchmaking/arena";
 import { redirect } from "next/navigation";
 
 function firstParam(
@@ -41,12 +42,13 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
   let session: DebateSession;
   if (roomParam?.trim()) {
     const rid = roomParam.trim();
+    const requestedFormat = normalizeArenaDebateFormat(formatParam, "wsda");
     const arena = await loadArenaDebateSession(rid);
     if (!arena.ok) {
       if (arena.reason === "unauthenticated") {
         redirect(
           `/login?redirect=${encodeURIComponent(
-            `/debate?room=${encodeURIComponent(rid)}&format=wsda&topic=custom`,
+            `/debate?room=${encodeURIComponent(rid)}&format=${encodeURIComponent(requestedFormat)}&topic=custom`,
           )}`,
         );
       }
@@ -63,7 +65,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
     );
   }
   const isWsda = session.debateFormat === "wsda";
-  const isSoloAiDebate = Boolean(topicParam?.trim()) && !isWsda;
+  const isArenaFreeForm = Boolean(session.arenaRoomId) && session.debateFormat === "free_form";
 
   return (
     <div className="debate-room-pixel-bg font-headline-pixel text-on-surface">
@@ -197,19 +199,34 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                           {session.topicTitle}
                         </h1>
                       </div>
-                      <SoloDebateTimeoutTimer
-                        sessionMeta={{
-                          sessionId: session.id,
-                          topicTitle: session.topicTitle,
-                          opponentName: session.opponentName,
-                          userRole: session.userRole,
-                          debateFormat: session.debateFormat,
-                          arenaRoomId: session.arenaRoomId,
-                        }}
-                        staticMmSs={session.timerMmSs}
-                        soloTotalSeconds={session.soloDurationSeconds}
-                        compact
-                      />
+                      {isArenaFreeForm ? (
+                        <ArenaFreeFormTimeoutTimer
+                          sessionMeta={{
+                            sessionId: session.id,
+                            topicTitle: session.topicTitle,
+                            opponentName: session.opponentName,
+                            userRole: session.userRole,
+                            debateFormat: session.debateFormat,
+                            arenaRoomId: session.arenaRoomId,
+                          }}
+                          roomId={session.arenaRoomId!}
+                          compact
+                        />
+                      ) : (
+                        <SoloDebateTimeoutTimer
+                          sessionMeta={{
+                            sessionId: session.id,
+                            topicTitle: session.topicTitle,
+                            opponentName: session.opponentName,
+                            userRole: session.userRole,
+                            debateFormat: session.debateFormat,
+                            arenaRoomId: session.arenaRoomId,
+                          }}
+                          staticMmSs={session.timerMmSs}
+                          soloTotalSeconds={session.soloDurationSeconds}
+                          compact
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -219,7 +236,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                 <section className="col-span-12 border-r-4 border-red-950 bg-[#2a0808]/90 p-6 backdrop-blur-sm lg:col-span-3">
                   <h2 className="pixel-text-base mb-8 flex items-center gap-2 font-black uppercase text-red-100">
                     <MaterialIcon name="menu_book" className="text-orange-500" />
-                    Solo Debate
+                    {isArenaFreeForm ? "Arena Free Form" : "Solo Debate"}
                   </h2>
                   <div className="space-y-6">
                     <div className="border-2 border-red-900 bg-black/60 p-4 shadow-[4px_4px_0px_0px_#7f1d1d]">
@@ -227,8 +244,9 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                         Format
                       </h3>
                       <p className="pixel-text-xs text-stone-200">
-                        This solo debate is free-form. You can argue in your own style
-                        without phase restrictions.
+                        {isArenaFreeForm
+                          ? "This arena debate is free-form. You and your opponent can argue in your own style without phase restrictions."
+                          : "This solo debate is free-form. You can argue in your own style without phase restrictions."}
                       </p>
                     </div>
                     <div className="border-2 border-red-600 bg-red-950/80 p-4 shadow-[4px_4px_0px_0px_#ba1a1a]">
@@ -236,9 +254,9 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                         Tip
                       </h3>
                       <p className="pixel-text-xs leading-normal text-red-200">
-                        End Debate before time is up counts as an immediate forfeit
-                        loss. Let the timer finish if you want AI judging and
-                        full feedback.
+                        {isArenaFreeForm
+                          ? "Arena free-form rounds last 1 minute. Let the timer finish for AI judging; ending early records a forfeit."
+                          : "End Debate before time is up counts as an immediate forfeit loss. Let the timer finish if you want AI judging and full feedback."}
                       </p>
                     </div>
                   </div>
@@ -255,6 +273,9 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                     debateFormat={session.debateFormat}
                     topicTitle={session.topicTitle}
                     userRole={session.userRole}
+                    arenaRoomId={session.arenaRoomId}
+                    selfAvatarUrl={session.selfAvatarUrl}
+                    opponentAvatarUrl={session.opponentAvatarUrl}
                   />
                 </section>
 

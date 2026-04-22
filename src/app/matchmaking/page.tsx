@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { NetherSidebarShell } from "@/components/layout/NetherSidebarShell";
 import { OnboardingSidebar } from "@/components/sidebars/OnboardingSidebar";
 import { MaterialIcon } from "@/components/MaterialIcon";
 import { pickRandomMatchTopic } from "@/lib/debate/random-match-topics";
-import { parseArenaMatchRpcResult } from "@/lib/matchmaking/arena";
+import {
+  normalizeArenaDebateFormat,
+  parseArenaMatchRpcResult,
+  type ArenaDebateFormat,
+} from "@/lib/matchmaking/arena";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
 
 const SEARCH_DURATION_MS = 60_000;
@@ -15,15 +19,28 @@ const TICK_MS = SEARCH_DURATION_MS / 100;
 
 export default function MatchmakingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawFormat = searchParams.get("format");
+  const hasValidFormatParam =
+    rawFormat === "wsda" || rawFormat === "free_form";
+  const selectedFormat: ArenaDebateFormat = normalizeArenaDebateFormat(rawFormat, "wsda");
   const [pct, setPct] = useState(0);
   const [matched, setMatched] = useState(false);
   const doneRef = useRef(false);
   const [arenaAuthChecked, setArenaAuthChecked] = useState(!isSupabaseConfigured());
   const [arenaAuthed, setArenaAuthed] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
-  const searchStartedAt = useRef<number>(Date.now());
+  const searchStartedAt = useRef<number>(0);
 
   useEffect(() => {
+    if (!hasValidFormatParam) {
+      router.replace("/arena/setup");
+      return;
+    }
+  }, [hasValidFormatParam, router]);
+
+  useEffect(() => {
+    if (!hasValidFormatParam) return;
     if (!isSupabaseConfigured()) return;
     let cancelled = false;
     void (async () => {
@@ -33,7 +50,9 @@ export default function MatchmakingPage() {
       } = await supabase.auth.getSession();
       if (cancelled) return;
       if (!session) {
-        router.replace("/login?redirect=/matchmaking");
+        router.replace(
+          `/login?redirect=${encodeURIComponent(`/matchmaking?format=${selectedFormat}`)}`,
+        );
         return;
       }
       setArenaAuthed(true);
@@ -42,9 +61,10 @@ export default function MatchmakingPage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [hasValidFormatParam, router, selectedFormat]);
 
   useEffect(() => {
+    if (!hasValidFormatParam) return;
     if (isSupabaseConfigured()) return;
     let intervalId: number | undefined;
     let navigateTimeoutId: number | undefined;
@@ -61,8 +81,9 @@ export default function MatchmakingPage() {
         setMatched(true);
         navigateTimeoutId = window.setTimeout(() => {
           const topic = pickRandomMatchTopic();
+          const format = selectedFormat;
           router.push(
-            `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=wsda`,
+            `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=${encodeURIComponent(format)}`,
           );
         }, 1000);
       }
@@ -72,26 +93,30 @@ export default function MatchmakingPage() {
       if (intervalId !== undefined) window.clearInterval(intervalId);
       if (navigateTimeoutId !== undefined) window.clearTimeout(navigateTimeoutId);
     };
-  }, [router]);
+  }, [hasValidFormatParam, router, selectedFormat]);
 
   useEffect(() => {
+    if (!hasValidFormatParam) return;
     if (!isSupabaseConfigured() || !arenaAuthed) return;
 
     const supabase = createClient();
     let cancelled = false;
-    let pollId: ReturnType<typeof setInterval> | undefined;
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    function goToRoom(roomId: string) {
+    function goToRoom(roomId: string, debateFormat: ArenaDebateFormat) {
       if (doneRef.current) return;
       doneRef.current = true;
       setMatched(true);
       setPct(100);
-      router.push(`/debate?room=${encodeURIComponent(roomId)}&format=wsda&topic=custom`);
+      router.push(
+        `/debate?room=${encodeURIComponent(roomId)}&format=${encodeURIComponent(debateFormat)}&topic=custom`,
+      );
     }
 
     async function tick() {
-      const { data, error } = await supabase.rpc("arena_request_match");
+      const { data, error } = await supabase.rpc("arena_request_match", {
+        p_format: selectedFormat,
+      });
       if (cancelled) return;
       if (error) {
         console.warn("arena_request_match:", error.message);
@@ -106,7 +131,7 @@ export default function MatchmakingPage() {
         return;
       }
       if (parsed.status === "matched") {
-        goToRoom(parsed.room_id);
+        goToRoom(parsed.room_id, parsed.debate_format);
       }
     }
 
@@ -121,7 +146,7 @@ export default function MatchmakingPage() {
       await tick();
     })();
 
-    pollId = setInterval(() => void tick(), 800);
+    const pollId = setInterval(() => void tick(), 800);
 
     void supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user || cancelled) return;
@@ -138,7 +163,7 @@ export default function MatchmakingPage() {
           (payload) => {
             const row = payload.new as { status?: string; room_id?: string | null };
             if (row?.status === "matched" && row.room_id) {
-              goToRoom(row.room_id);
+              goToRoom(row.room_id, selectedFormat);
             }
           },
         )
@@ -147,12 +172,13 @@ export default function MatchmakingPage() {
 
     return () => {
       cancelled = true;
-      if (pollId !== undefined) clearInterval(pollId);
+      clearInterval(pollId);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [arenaAuthed, router]);
+  }, [arenaAuthed, hasValidFormatParam, router, selectedFormat]);
 
   useEffect(() => {
+    if (!hasValidFormatParam) return;
     if (!isSupabaseConfigured() || !arenaAuthed || matched) return;
     searchStartedAt.current = Date.now();
     const id = window.setInterval(() => {
@@ -161,7 +187,7 @@ export default function MatchmakingPage() {
       setPct(Math.min(95, Math.floor((elapsed / 120_000) * 100)));
     }, 400);
     return () => window.clearInterval(id);
-  }, [arenaAuthed, matched]);
+  }, [arenaAuthed, hasValidFormatParam, matched]);
 
   async function cancelQueueAndGo(href: string) {
     if (isSupabaseConfigured()) {
@@ -249,7 +275,7 @@ export default function MatchmakingPage() {
                     onClick={() => {
                       const topic = pickRandomMatchTopic();
                       router.push(
-                        `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=wsda`,
+                        `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=${encodeURIComponent(selectedFormat)}`,
                       );
                     }}
                     className="bg-[#2d0d0d] px-6 py-3 text-xs font-black uppercase text-white shadow-[6px_6px_0px_0px_rgba(0,0,0,0.9)] transition-all duration-75 hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,0.9)] hover:translate-x-[3px] hover:translate-y-[3px] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none brick-sans md:hidden"
@@ -262,7 +288,7 @@ export default function MatchmakingPage() {
                     onClick={() => {
                       const topic = pickRandomMatchTopic();
                       void cancelQueueAndGo(
-                        `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=wsda`,
+                        `/debate?topic=custom&title=${encodeURIComponent(topic)}&format=${encodeURIComponent(selectedFormat)}`,
                       );
                     }}
                     className="bg-[#2d0d0d] px-6 py-3 text-xs font-black uppercase text-white shadow-[6px_6px_0px_0px_rgba(0,0,0,0.9)] transition-all duration-75 hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,0.9)] hover:translate-x-[3px] hover:translate-y-[3px] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none brick-sans md:hidden"
@@ -307,7 +333,8 @@ export default function MatchmakingPage() {
               id="match-found-desc"
               className="mb-2 text-center text-sm font-medium leading-relaxed text-stone-200 md:text-base"
             >
-              Opponent locked in. Loading the WSDA debate room…
+              Opponent locked in. Loading your{" "}
+              {selectedFormat === "wsda" ? "WSDA" : "free-form"} debate room…
             </p>
             <p className="text-center text-xs uppercase tracking-widest text-[#58B13E]">
               Entering arena

@@ -49,9 +49,15 @@ function normalizeTranscript(value: unknown): DebateTranscriptEntry[] {
 async function persistArenaJudgement(input: {
   arenaRoomId: string;
   topicTitle: string;
-  debateFormat?: "wsda";
+  debateFormat?: "wsda" | "free_form";
   transcript: DebateTranscriptEntry[];
-  judge: Awaited<ReturnType<typeof judgeDebateAndFeedback>>;
+  judge: {
+    winner: "pro" | "con";
+    confidence: number;
+    rationale: string;
+    pro: Awaited<ReturnType<typeof judgeDebateAndFeedback>>;
+    con: Awaited<ReturnType<typeof judgeDebateAndFeedback>>;
+  };
 }): Promise<DebateResult> {
   const supabase = await createServerSupabase();
   const {
@@ -68,17 +74,31 @@ async function persistArenaJudgement(input: {
     winner_side: input.judge.winner,
     confidence: input.judge.confidence,
     rationale: input.judge.rationale,
-    feedback: input.judge.feedback,
-    quote: input.judge.quote,
-    clarity_score: input.judge.scores.clarity,
-    evidence_score: input.judge.scores.evidence,
+    feedback: input.judge.pro.feedback,
+    quote: input.judge.pro.quote,
+    clarity_score: input.judge.pro.scores.clarity,
+    evidence_score: input.judge.pro.scores.evidence,
+    pro_feedback: input.judge.pro.feedback,
+    pro_quote: input.judge.pro.quote,
+    pro_clarity_score: input.judge.pro.scores.clarity,
+    pro_evidence_score: input.judge.pro.scores.evidence,
+    con_feedback: input.judge.con.feedback,
+    con_quote: input.judge.con.quote,
+    con_clarity_score: input.judge.con.scores.clarity,
+    con_evidence_score: input.judge.con.scores.evidence,
   };
   const { data, error } = await supabase.rpc("arena_store_judged_result", {
     p_room: input.arenaRoomId,
     p_judgement: judgementPayload,
   });
   if (error) {
-    throw new Error(error.message);
+    const msg = error.message ?? "Failed to store judged result.";
+    if (msg.includes("arena_store_judged_result")) {
+      throw new Error(
+        "Arena judge RPC is missing in this database. Apply latest Supabase migrations and retry.",
+      );
+    }
+    throw new Error(msg);
   }
   const row = data as {
     status?: string;
@@ -119,7 +139,10 @@ export async function POST(request: Request) {
     const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : "";
     const topicTitle = typeof body.topicTitle === "string" ? body.topicTitle.trim() : "";
     const userRole = body.userRole === "con" ? "con" : "pro";
-    const debateFormat = body.debateFormat === "wsda" ? "wsda" : undefined;
+    const debateFormat =
+      body.debateFormat === "wsda" || body.debateFormat === "free_form"
+        ? body.debateFormat
+        : undefined;
     const ageBand = normalizeAgeBand(body.ageBand);
     const arenaRoomId =
       typeof body.arenaRoomId === "string" ? body.arenaRoomId.trim() : "";
@@ -138,67 +161,114 @@ export async function POST(request: Request) {
       );
     }
 
-    const judgement = await judgeDebateAndFeedback({
-      topicTitle,
-      debateFormat,
-      userRole,
-      ageBand,
-      transcript,
-    });
-
-    if (arenaRoomId) {
-      if (!isSupabaseConfigured()) {
-        return NextResponse.json(
-          { ok: false, error: "Arena judging requires Supabase configuration." },
-          { status: 500 },
-        );
-      }
-      const payload = await persistArenaJudgement({
-        arenaRoomId,
+    const [judgementForPro, judgementForCon] = await Promise.all([
+      judgeDebateAndFeedback({
         topicTitle,
         debateFormat,
+        userRole: "pro",
+        ageBand,
         transcript,
-        judge: judgement,
+      }),
+      judgeDebateAndFeedback({
+        topicTitle,
+        debateFormat,
+        userRole: "con",
+        ageBand,
+        transcript,
+      }),
+    ]);
+
+    let winner: "pro" | "con";
+    let confidence: number;
+    if (judgementForPro.winner === judgementForCon.winner) {
+      winner = judgementForPro.winner;
+      confidence = Math.max(
+        judgementForPro.confidence,
+        judgementForCon.confidence,
+      );
+    } else if (judgementForPro.confidence >= judgementForCon.confidence) {
+      winner = judgementForPro.winner;
+      confidence = judgementForPro.confidence;
+    } else {
+      winner = judgementForCon.winner;
+      confidence = judgementForCon.confidence;
+    }
+
+    const mergedRationale = `Pro-view rationale: ${judgementForPro.rationale} Con-view rationale: ${judgementForCon.rationale}`;
+    const judgement = {
+      winner,
+      confidence,
+      rationale: mergedRationale,
+      pro: judgementForPro,
+      con: judgementForCon,
+    };
+
+    const callerSide = userRole;
+    const callerFeedback = callerSide === "pro" ? judgement.pro.feedback : judgement.con.feedback;
+    const callerQuote = callerSide === "pro" ? judgement.pro.quote : judgement.con.quote;
+    const callerScores =
+      callerSide === "pro" ? judgement.pro.scores : judgement.con.scores;
+
+    if (!arenaRoomId) {
+      let totalExperienceBefore = 0;
+      try {
+        const supabase = await createServerSupabase();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("total_experience")
+            .eq("id", user.id)
+            .maybeSingle();
+          totalExperienceBefore = Number(prof?.total_experience ?? 0);
+        }
+      } catch {
+        /* guest or missing Supabase env */
+      }
+
+      const result = buildLocalAiJudgedResult({
+        sessionId,
+        topicTitle,
+        userRole,
+        transcript,
+        debateFormat,
+        judgement: {
+          winner: judgement.winner,
+          confidence: judgement.confidence,
+          rationale: judgement.rationale,
+          feedback: callerFeedback,
+          quote: callerQuote,
+          scores: callerScores,
+        },
+        totalExperienceBefore,
       });
+
       return NextResponse.json({
         ok: true,
-        persisted: true,
-        result: payload,
+        persisted: false,
+        result,
       });
     }
 
-    let totalExperienceBefore = 0;
-    try {
-      const supabase = await createServerSupabase();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data: prof } = await supabase
-          .from("profiles")
-          .select("total_experience")
-          .eq("id", user.id)
-          .maybeSingle();
-        totalExperienceBefore = Number(prof?.total_experience ?? 0);
-      }
-    } catch {
-      /* guest or missing Supabase env */
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        { ok: false, error: "Arena judging requires Supabase configuration." },
+        { status: 500 },
+      );
     }
-
-    const result = buildLocalAiJudgedResult({
-      sessionId,
+    const payload = await persistArenaJudgement({
+      arenaRoomId,
       topicTitle,
-      userRole,
-      transcript,
       debateFormat,
-      judgement,
-      totalExperienceBefore,
+      transcript,
+      judge: judgement,
     });
-
     return NextResponse.json({
       ok: true,
-      persisted: false,
-      result,
+      persisted: true,
+      result: payload,
     });
   } catch (error) {
     const message =

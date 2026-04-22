@@ -4,12 +4,26 @@
       status: "matched";
       room_id: string;
       topic_title: string;
-      debate_format: string;
+      debate_format: ArenaDebateFormat;
       opponent_id: string;
       opponent_display_name: string;
       role: "pro" | "con";
     }
   | { status: "error"; message: string };
+
+export type ArenaDebateFormat = "wsda" | "free_form";
+
+export function normalizeArenaDebateFormat(
+  value: unknown,
+  fallback: ArenaDebateFormat = "wsda",
+): ArenaDebateFormat {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "wsda" || normalized === "free_form") {
+    return normalized;
+  }
+  return fallback;
+}
 
 function normalizeRpcJson(data: unknown): unknown {
   if (typeof data === "string") {
@@ -45,8 +59,7 @@ export function parseArenaMatchRpcResult(data: unknown): ArenaMatchRpcResult {
   const topicTitle = o.topic_title != null ? String(o.topic_title) : "";
   const opponentId = o.opponent_id != null ? String(o.opponent_id) : "";
   const opponentName = o.opponent_display_name != null ? String(o.opponent_display_name) : "";
-  const debateFormat =
-    o.debate_format != null ? String(o.debate_format) : "wsda";
+  const debateFormat = normalizeArenaDebateFormat(o.debate_format, "wsda");
   const role = o.role;
   if (
     !roomId ||

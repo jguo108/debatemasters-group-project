@@ -90,20 +90,28 @@ export function buildArenaDebateSession(input: {
   topicTitle: string;
   opponentName: string;
   userRole: "pro" | "con";
+  debateFormat: "wsda" | "free_form";
   selfAvatarUrl?: string;
   opponentAvatarUrl?: string;
 }): DebateSession {
   const first = WSDA_PHASES[0];
+  const isWsda = input.debateFormat === "wsda";
+  const soloSeconds = 60;
   return {
     ...mockDebateSession,
     id: `debate_arena_${input.roomId}`,
     arenaRoomId: input.roomId,
     topicTitle: input.topicTitle,
-    locationLabel: "WSDA Arena — Live match",
-    phaseLabel: wsdaPhaseBanner(0),
-    timerMmSs: first ? formatMmSs(first.durationSec) : "02:00",
-    phaseDurationSeconds: first?.durationSec ?? 120,
-    debateFormat: "wsda",
+    locationLabel: isWsda ? "WSDA Arena — Live match" : "Free Form Arena — Live match",
+    phaseLabel: isWsda ? wsdaPhaseBanner(0) : "Open Debate",
+    timerMmSs: isWsda
+      ? first
+        ? formatMmSs(first.durationSec)
+        : "02:00"
+      : formatMmSs(soloSeconds),
+    phaseDurationSeconds: isWsda ? (first?.durationSec ?? 120) : undefined,
+    soloDurationSeconds: isWsda ? undefined : soloSeconds,
+    debateFormat: input.debateFormat,
     opponentName: input.opponentName,
     userRole: input.userRole,
     selfAvatarUrl: input.selfAvatarUrl,

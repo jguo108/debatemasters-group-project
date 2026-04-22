@@ -18,7 +18,7 @@ type BuildLocalJudgedResultInput = {
   topicTitle: string;
   userRole?: "pro" | "con";
   transcript: DebateTranscriptEntry[];
-  debateFormat?: "wsda";
+  debateFormat?: "wsda" | "free_form";
   judgement: AiJudgeSummary;
   /** Lifetime XP before this match (from `profiles` or guest snapshot). */
   totalExperienceBefore?: number;

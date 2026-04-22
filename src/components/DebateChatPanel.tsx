@@ -43,7 +43,7 @@ type DebateChatPanelProps = {
   sessionId: string;
   opponentName: string;
   phaseLabel: string;
-  debateFormat?: "wsda";
+  debateFormat?: "wsda" | "free_form";
   topicTitle?: string;
   userRole?: "pro" | "con";
   /** WSDA: current segment index (0-based). */
@@ -379,7 +379,7 @@ export function DebateChatPanel({
   );
 
   const wsdaArenaTimeline = useMemo((): WsdaChatRow[] => {
-    if (!isWsda || !arenaRoomId) return [];
+    if (!arenaRoomId) return [];
     const rows: WsdaChatRow[] = [];
     let sk = 0;
     for (const e of wsdaSystemFeed) {
@@ -406,7 +406,7 @@ export function DebateChatPanel({
       return a.kind === "system" ? -1 : 1;
     });
     return rows;
-  }, [isWsda, arenaRoomId, wsdaSystemFeed, arenaMessages]);
+  }, [arenaRoomId, wsdaSystemFeed, arenaMessages]);
 
   const wsdaLocalTimeline = useMemo((): WsdaChatRow[] => {
     if (!isWsda || arenaRoomId) return [];
@@ -483,15 +483,19 @@ export function DebateChatPanel({
   }, [arenaRoomId]);
 
   useEffect(() => {
-    if (!arenaRoomId || !isWsda) return;
+    if (!arenaRoomId) return;
     for (const m of arenaMessages) {
       if (arenaTranscriptRef.current.has(m.id)) continue;
       arenaTranscriptRef.current.add(m.id);
       const isSelf = arenaUserId != null && m.user_id === arenaUserId;
       appendTranscriptEntry({
         speaker: isSelf
-          ? `You (${youRoleTag})`
-          : `${opponentName} (${opponentRoleTag})`,
+          ? isWsda
+            ? `You (${youRoleTag})`
+            : `${youDisplayName} (You)`
+          : isWsda
+            ? `${opponentName} (${opponentRoleTag})`
+            : opponentName,
         text: m.body,
         at: m.created_at,
       });
@@ -503,6 +507,7 @@ export function DebateChatPanel({
     isWsda,
     opponentName,
     opponentRoleTag,
+    youDisplayName,
     youRoleTag,
     appendTranscriptEntry,
   ]);
@@ -614,7 +619,7 @@ export function DebateChatPanel({
         ref={scrollRef}
         className="pixel-bg-grid relative max-h-[min(700px,55vh)] flex-1 space-y-10 overflow-y-auto p-4 md:p-6"
       >
-        {!isWsda
+        {!isWsda && !arenaRoomId
           ? soloChatRows.map((row) => {
               const isSelf = row.speaker === "you";
               return (
@@ -699,7 +704,7 @@ export function DebateChatPanel({
           </div>
         ) : null}
 
-        {arenaRoomId && isWsda
+        {arenaRoomId
           ? wsdaArenaTimeline.map((row) => {
               if (row.kind === "system") {
                 return (
@@ -758,8 +763,12 @@ export function DebateChatPanel({
                       }`}
                     >
                       {isSelf
-                        ? `You (${youRoleTag})`
-                        : `${opponentName} (${opponentRoleTag})`}
+                        ? isWsda
+                          ? `You (${youRoleTag})`
+                          : `${youDisplayName} (You)`
+                        : isWsda
+                          ? `${opponentName} (${opponentRoleTag})`
+                          : opponentName}
                     </span>
                     <p
                       className={`pixel-text-xs leading-loose whitespace-pre-wrap ${
@@ -897,9 +906,11 @@ export function DebateChatPanel({
                   : userCanPost && !roundComplete
                     ? "Your side may speak — stay within the rules for this phase."
                     : inputDisabledHint ?? "Wait for your turn."
-            : soloAwaitingReply
-              ? "Opponent is drafting a rebuttal..."
-              : "Ready for your next argument."}
+            : arenaRoomId
+              ? "Live arena — messages sync between both players."
+              : soloAwaitingReply
+                ? "Opponent is drafting a rebuttal..."
+                : "Ready for your next argument."}
         </div>
         {!isWsda && soloUsedFallback ? (
           <div

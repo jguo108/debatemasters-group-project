@@ -37,7 +37,7 @@ export type ForfeitMeta = {
   topicTitle: string;
   opponentName: string;
   userRole?: "pro" | "con";
-  debateFormat?: "wsda";
+  debateFormat?: "wsda" | "free_form";
   /** Supabase `debate_rooms.id` — used for stable result IDs and server forfeit RPC. */
   arenaRoomId?: string;
   /** Current user id (optional; enables stable `debate_results` id for arena forfeits). */

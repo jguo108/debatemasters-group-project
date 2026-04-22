@@ -33,8 +33,8 @@ export interface DebateSession {
   soloDurationSeconds?: number;
   opponentName: string;
   userRole: "pro" | "con";
-  /** When set, debate room uses WSDA segment timing instead of solo AI clock. */
-  debateFormat?: "wsda";
+  /** Debate format in current session (WSDA structured vs free-form). */
+  debateFormat?: "wsda" | "free_form";
   /** Initial segment length for live countdown (WSDA). */
   phaseDurationSeconds?: number;
   /** Supabase `debate_rooms.id` — enables live chat sync between matched players. */

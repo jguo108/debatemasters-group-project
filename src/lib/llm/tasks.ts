@@ -15,7 +15,7 @@ export type OpponentReplyRequest = {
 
 export type JudgeDebateRequest = {
   topicTitle: string;
-  debateFormat?: "wsda";
+  debateFormat?: "wsda" | "free_form";
   userRole?: "pro" | "con";
   ageBand?: AgeBand;
   transcript: DebateTranscriptEntry[];

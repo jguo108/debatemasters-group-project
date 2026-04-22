@@ -126,7 +126,7 @@ export default function OnboardingPage() {
                   </div>
                   <div className="pt-4">
                     <Link
-                      href="/matchmaking"
+                      href="/arena/setup"
                       prefetch={false}
                       className="brick-sans block w-full border-b-4 border-r-4 border-[#3d8a2e] bg-[#58B13E] py-4 text-center font-black uppercase tracking-widest text-white transition-all hover:brightness-110 active:translate-y-1 active:border-0"
                     >

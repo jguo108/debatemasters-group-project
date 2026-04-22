@@ -1,6 +1,7 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import { buildArenaDebateSession } from "@/lib/data/repository";
 import type { DebateSession } from "@/lib/data/types";
+import { normalizeArenaDebateFormat } from "@/lib/matchmaking/arena";
 
 export type ArenaRoomLoadResult =
   | { ok: true; session: DebateSession }
@@ -17,7 +18,7 @@ export async function loadArenaDebateSession(roomId: string): Promise<ArenaRoomL
 
   const { data: row, error } = await supabase
     .from("debate_rooms")
-    .select("id, topic_title, pro_user_id, con_user_id")
+    .select("id, topic_title, debate_format, pro_user_id, con_user_id")
     .eq("id", roomId)
     .maybeSingle();
 
@@ -58,6 +59,7 @@ export async function loadArenaDebateSession(roomId: string): Promise<ArenaRoomL
       topicTitle: row.topic_title,
       opponentName,
       userRole,
+      debateFormat: normalizeArenaDebateFormat(row.debate_format, "wsda"),
       selfAvatarUrl: selfAvatarUrl || undefined,
       opponentAvatarUrl: opponentAvatarUrl || undefined,
     }),

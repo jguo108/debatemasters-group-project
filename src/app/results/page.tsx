@@ -27,7 +27,11 @@ function historyOutcomeLabel(d: {
   if (d.outcome === "victory") return "Victory";
   if (d.outcome === "forfeit") return "Defeat";
   // AI judged losses were historically stored as "effort"; show as Defeat in history.
-  if (d.outcome === "effort" && d.headline.toUpperCase().startsWith("AI JUDGE:")) {
+  if (
+    d.outcome === "effort" &&
+    (d.headline.toUpperCase().startsWith("AI JUDGE:") ||
+      d.headline.toUpperCase().startsWith("ARENA AI VERDICT:"))
+  ) {
     return "Defeat";
   }
   return "Tie";
