@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { NetherSidebarShell } from "@/components/layout/NetherSidebarShell";
 import { OnboardingSidebar } from "@/components/sidebars/OnboardingSidebar";
@@ -17,7 +17,19 @@ import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-clien
 const SEARCH_DURATION_MS = 60_000;
 const TICK_MS = SEARCH_DURATION_MS / 100;
 
-export default function MatchmakingPage() {
+function MatchmakingPageFallback() {
+  return (
+    <div className="overflow-hidden bg-surface font-[family-name:var(--font-inter)] text-on-surface">
+      <NetherSidebarShell sidebar={<OnboardingSidebar />}>
+        <main className="matchmaking-nether-bg relative flex h-[100dvh] items-center justify-center md:h-screen">
+          <p className="brick-sans text-sm font-black uppercase text-white">Loading…</p>
+        </main>
+      </NetherSidebarShell>
+    </div>
+  );
+}
+
+function MatchmakingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawFormat = searchParams.get("format");
@@ -373,5 +385,13 @@ export default function MatchmakingPage() {
         </button>
       </footer>
     </div>
+  );
+}
+
+export default function MatchmakingPage() {
+  return (
+    <Suspense fallback={<MatchmakingPageFallback />}>
+      <MatchmakingPageContent />
+    </Suspense>
   );
 }
