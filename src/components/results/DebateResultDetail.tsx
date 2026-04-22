@@ -22,8 +22,8 @@ export function DebateResultDetail({ r }: { r: DebateResult }) {
         <ResultTopicTitle topicTitle={r.topicTitle} />
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-10 md:grid-cols-12">
-        <div className="relative group md:col-span-7">
+      <div className="mx-auto max-w-3xl">
+        <div className="relative group">
           <div className="absolute -top-4 -left-4 h-full w-full bg-black" />
           <div className="relative border-4 border-secondary bg-stone-100 p-6 shadow-lg md:p-8">
             <div className="mb-6 flex items-center gap-3 border-b border-stone-300 pb-4">
@@ -97,74 +97,6 @@ export function DebateResultDetail({ r }: { r: DebateResult }) {
           <div className="mx-auto mt-0 h-4 w-1/2 border-x-8 border-black bg-stone-900 shadow-[0_4px_0_#000]" />
         </div>
 
-        <div className="space-y-6 md:col-span-5">
-          <h3 className="flex items-center gap-2 text-base font-bold uppercase tracking-wide text-white md:text-lg">
-            <MaterialIcon name="auto_stories" filled />
-            Suggested tome study
-          </h3>
-
-          {r.suggestedTomes.map((tome, index) => (
-            <a
-              key={`${r.id}-tome-${index}`}
-              href="#"
-              className={`group relative block border-4 border-black p-5 transition-transform hover:-translate-y-1 pixel-shadow md:p-6 ${
-                tome.accent === "tertiary" ? "bg-tertiary" : "bg-primary"
-              }`}
-            >
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/20 to-transparent" />
-              <div className="relative flex items-start gap-4">
-                <div className="relative flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden border-4 border-white/60 bg-[#b24bf3] pixel-shadow">
-                  <div className="absolute top-0 left-0 h-full w-full -rotate-45 bg-gradient-to-r from-transparent via-white/40 to-transparent" />
-                  <MaterialIcon name={tome.icon} className="text-3xl text-white" />
-                </div>
-                <div className="min-w-0">
-                  <h4 className="text-sm font-bold uppercase leading-snug tracking-wide text-white md:text-base">
-                    {tome.title}
-                  </h4>
-                  <p
-                    className={`mt-1 text-xs font-semibold uppercase tracking-wide opacity-90 ${
-                      tome.accent === "tertiary"
-                        ? "text-tertiary-fixed"
-                        : "text-primary-fixed"
-                    }`}
-                  >
-                    {tome.subtitle}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="bg-black/40 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
-                  {tome.kind === "enchanted" ? "Enchanted" : "Rare"}
-                </span>
-                <span className="bg-black/40 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
-                  {tome.label}
-                </span>
-              </div>
-            </a>
-          ))}
-
-          <div className="border-4 border-stone-800 bg-black p-6 pixel-shadow">
-            <h4 className="mb-4 border-b border-stone-700 pb-2 text-xs font-bold uppercase tracking-wide text-stone-100">
-              Loot dropped
-            </h4>
-            <ul className="space-y-3">
-              {r.loot.map((item, index) => (
-                <li key={`${r.id}-loot-${index}`} className="flex items-center gap-3">
-                  <div
-                    className={`h-8 w-8 shrink-0 border-4 ${
-                      item.tone === "gold"
-                        ? "border-yellow-700 bg-yellow-400"
-                        : "border-emerald-700 bg-emerald-400"
-                    }`}
-                  />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-stone-300">
-                    {item.label}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
       </div>
 
       <section className="mt-14 border-4 border-stone-800 bg-black/75 p-5 pixel-shadow md:p-6">
