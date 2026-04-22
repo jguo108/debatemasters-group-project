@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,7 +14,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -26,6 +28,7 @@ export default function LoginPage() {
 
   async function handleLogin() {
     setError(null);
+    setNotice(null);
     if (!isSupabaseConfigured()) {
       setError("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
       return;
@@ -51,6 +54,41 @@ export default function LoginPage() {
       router.refresh();
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleForgotCredentials() {
+    setError(null);
+    setNotice(null);
+    if (!isSupabaseConfigured()) {
+      setError("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      return;
+    }
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setError("Enter your account email first, then click Forgot Credentials.");
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      const supabase = createClient();
+      const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+      const appBaseUrl =
+        configuredAppUrl && configuredAppUrl.length > 0
+          ? configuredAppUrl.replace(/\/+$/, "")
+          : window.location.origin;
+      const redirectTo = `${appBaseUrl}/reset-password`;
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo,
+      });
+      if (resetError) {
+        setError(resetError.message);
+        return;
+      }
+      setNotice("Password reset email sent. Open the link in your email to choose a new password.");
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -154,6 +192,11 @@ export default function LoginPage() {
                 {error}
               </p>
             ) : null}
+            {notice ? (
+              <p className="border-2 border-green-800 bg-green-950/40 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-green-200">
+                {notice}
+              </p>
+            ) : null}
             <div className="flex flex-col gap-4">
               <button
                 type="button"
@@ -164,12 +207,14 @@ export default function LoginPage() {
                 {loading ? "..." : "LOG IN"}
               </button>
               <div className="flex items-center justify-between px-1">
-                <a
-                  href="#"
+                <button
+                  type="button"
+                  disabled={resetLoading}
+                  onClick={() => void handleForgotCredentials()}
                   className="pixel-text-xs font-bold uppercase tracking-widest text-stone-500 transition-colors hover:text-stone-300"
                 >
-                  Forgot Credentials?
-                </a>
+                  {resetLoading ? "Sending..." : "Forgot Credentials?"}
+                </button>
                 <div className="mx-4 h-[2px] flex-grow bg-stone-800" />
                 <Link
                   href="/register"
