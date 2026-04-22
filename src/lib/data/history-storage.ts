@@ -3,6 +3,14 @@
 import { useSyncExternalStore } from "react";
 import { mockDebateHistory } from "@/lib/data/mock/fixtures";
 import type { DebateResult, DebateTranscriptEntry } from "@/lib/data/types";
+import {
+  applyGuestExperienceDelta,
+  refreshUserProfileFromServer,
+} from "@/lib/data/profile-storage";
+import {
+  computeDebateExperienceReward,
+  progressionFieldsAfterMatch,
+} from "@/lib/progression/experience";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
 
 export const HISTORY_STORAGE_KEY = "debate-history-v1";
@@ -34,6 +42,8 @@ export type ForfeitMeta = {
   arenaRoomId?: string;
   /** Current user id (optional; enables stable `debate_results` id for arena forfeits). */
   selfUserId?: string;
+  /** For progression preview on the result card (guest + pre-save). */
+  totalExperienceBefore?: number;
 };
 
 function fallbackTranscript(
@@ -238,6 +248,8 @@ export async function appendDebateResultToHistory(
       const { error } = await supabase.from("debate_results").insert(insertRow);
       if (error) {
         console.warn("appendDebateResultToHistory:", error.message);
+      } else {
+        void refreshUserProfileFromServer();
       }
       sessionMode = "authed";
       fetchingAuthed = false;
@@ -262,6 +274,13 @@ export async function appendDebateResultToHistory(
     writeHiddenDebateIds(hiddenIds);
   }
   writeStoredDebateHistory(next);
+  applyGuestExperienceDelta(
+    computeDebateExperienceReward({
+      outcome: normalized.outcome,
+      arenaRoomId: normalized.arenaRoomId,
+      scores: normalized.scores,
+    }),
+  );
   return getCombinedDebateHistory();
 }
 
@@ -420,6 +439,14 @@ export function createForfeitResult(meta: ForfeitMeta): DebateResult {
     at: now.toISOString(),
   });
 
+  const scores = { clarity: 2.5, evidence: 2.2 };
+  const prog = progressionFieldsAfterMatch({
+    totalExperienceBefore: meta.totalExperienceBefore ?? 0,
+    outcome: "forfeit",
+    arenaRoomId: meta.arenaRoomId,
+    scores,
+  });
+
   return {
     id,
     ...(meta.arenaRoomId ? { arenaRoomId: meta.arenaRoomId } : {}),
@@ -428,15 +455,12 @@ export function createForfeitResult(meta: ForfeitMeta): DebateResult {
     outcome: "forfeit",
     headline: "DEFEAT BY EARLY EXIT",
     subline: `You ended the debate before the timer finished. ${meta.opponentName} (${opponentSide}) is awarded the win by forfeit.`,
-    level: 42,
-    xpCurrent: 2480,
-    xpToNext: 3000,
-    xpEarned: 20,
+    ...prog,
     feedback:
       `You exited the debate before completion, so the round is recorded as an automatic forfeit loss for your side (${yourSide}). Because the match did not run to time, no final judging comparison is applied. Stay in until the timer ends if you want full AI adjudication and feedback based on complete arguments.`,
     quote:
       "Discipline wins rounds. Stay in until the clock and structure are complete.",
-    scores: { clarity: 2.5, evidence: 2.2 },
+    scores,
     suggestedTomes: [
       {
         title: "Time Control Basics",
@@ -489,6 +513,14 @@ export function createOpponentVictoryByForfeitResult(meta: ForfeitMeta): DebateR
     at: now.toISOString(),
   });
 
+  const scores = { clarity: 4.1, evidence: 3.9 };
+  const prog = progressionFieldsAfterMatch({
+    totalExperienceBefore: meta.totalExperienceBefore ?? 0,
+    outcome: "victory",
+    arenaRoomId: meta.arenaRoomId,
+    scores,
+  });
+
   return {
     id,
     ...(meta.arenaRoomId ? { arenaRoomId: meta.arenaRoomId } : {}),
@@ -497,13 +529,10 @@ export function createOpponentVictoryByForfeitResult(meta: ForfeitMeta): DebateR
     outcome: "victory",
     headline: "VICTORY BY FORFEIT",
     subline: `${meta.opponentName} ended the debate. Your side (${yourSide}) wins.`,
-    level: 44,
-    xpCurrent: 2650,
-    xpToNext: 3000,
-    xpEarned: 120,
+    ...prog,
     feedback: `Your opponent forfeited this ${formatTag} round. You receive the win.`,
     quote: "Presence wins when the room stays fair — finish strong next time too.",
-    scores: { clarity: 4.1, evidence: 3.9 },
+    scores,
     suggestedTomes: [
       {
         title: "Closing Mechanics",

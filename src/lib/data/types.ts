@@ -8,6 +8,8 @@ export interface UserProfile {
   level: number;
   rankLabel: string;
   avatarUrl: string;
+  /** Lifetime experience orbs (server `profiles.total_experience`; guests mirror in localStorage). */
+  totalExperience: number;
 }
 
 export interface TopicCategory {

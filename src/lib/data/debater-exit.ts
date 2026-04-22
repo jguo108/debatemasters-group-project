@@ -7,6 +7,7 @@ import {
   createOpponentVictoryByForfeitResult,
   type ForfeitMeta,
 } from "@/lib/data/history-storage";
+import { getUserProfileSnapshot } from "@/lib/data/profile-storage";
 import { createClient } from "@/lib/supabase/browser-client";
 
 export type DebaterExitOutcome =
@@ -23,7 +24,11 @@ export async function recordDebaterExit(meta: ForfeitMeta): Promise<DebaterExitO
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const withSelf: ForfeitMeta = { ...meta, selfUserId: user?.id };
+  const withSelf: ForfeitMeta = {
+    ...meta,
+    selfUserId: user?.id,
+    totalExperienceBefore: getUserProfileSnapshot().totalExperience,
+  };
   const roomId = meta.arenaRoomId;
   if (roomId) {
     const { kind } = await arenaRecordForfeit(roomId);

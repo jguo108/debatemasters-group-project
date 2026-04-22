@@ -8,8 +8,9 @@
 export const mockUser: UserProfile = {
   id: "user_1",
   displayName: "Master_Builder",
-  level: 42,
-  rankLabel: "Novice Builder",
+  level: 1,
+  rankLabel: "Spawn Runner",
+  totalExperience: 0,
   avatarUrl:
     "https://lh3.googleusercontent.com/aida-public/AB6AXuBPMWnsk-CGiZsT0bXR8-Datn9g4nR7M2ug8UTqFgtGvGiwGBuPpJaxplbzPDDVxaFwTbrpaUVmrWByIGMZXNg1qvQDqzvKQHXqJT9sDqQYA854etFe9NNyybtTG2siJc6l5kexMPCzJmilFK07Vx_c6bXXxWtcuUV6l397W6-czfGjg3ZA-fFbdjiBIw82LYHoU57il1KOvgDT6eJP-apqVXMnMqZdfGyhfoVsv2_bpjGo6At7raLWdvg4WusY0PxyN9Mcqywxe4Q0",
 };

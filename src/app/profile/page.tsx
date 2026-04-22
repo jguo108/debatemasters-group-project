@@ -11,13 +11,13 @@ import {
   useUserProfile,
   updateUserProfile,
 } from "@/lib/data/profile-storage";
+import { xpProgressWithinLevel } from "@/lib/progression/experience";
 
 export default function ProfilePage() {
   const user = useUserProfile();
   const [displayName, setDisplayName] = useState(() => user.displayName);
   const [selectedAvatar, setSelectedAvatar] = useState(() => user.avatarUrl);
   const [saved, setSaved] = useState(false);
-  const headingName = user.displayName.toUpperCase();
 
   useEffect(() => {
     ensureUserProfileInitialized();
@@ -41,23 +41,25 @@ export default function ProfilePage() {
     displayName.trim().length > 0 &&
     (displayName.trim() !== user.displayName || selectedAvatar !== user.avatarUrl);
 
+  const xpBar = xpProgressWithinLevel(user.totalExperience);
+  const xpFillPct = Math.min(
+    100,
+    Math.round((xpBar.intoLevel / Math.max(1, xpBar.xpForNextLevel)) * 100),
+  );
+
   return (
     <div className="results-nether-bg relative min-h-screen overflow-x-hidden font-[family-name:var(--font-inter)] text-white">
       <div className="nether-haze-results" />
       <div className="crimson-particles" />
       <NetherSidebarShell sidebar={<OnboardingSidebar />}>
         <main className="relative z-10 mx-auto max-w-4xl px-6 py-10 md:px-10 md:py-14">
-          <header className="mb-8 flex flex-col gap-3 md:mb-10">
-            <p className="brick-sans text-xs uppercase tracking-[0.25em] text-orange-400">
-              PROFILE
-            </p>
-            <h1 className="brick-sans text-4xl font-black uppercase tracking-tight text-white drop-shadow-[4px_4px_0_rgba(0,0,0,0.8)] md:text-5xl">
-              {headingName}
-            </h1>
-            <p className="max-w-xl text-sm uppercase tracking-wide text-stone-300">
-              Pick your Minecraft avatar, update your username, and keep building your debate identity.
-            </p>
-          </header>
+          <Link
+            href="/onboarding"
+            className="brick-sans mb-6 inline-flex items-center gap-2 border-b-4 border-r-4 border-stone-800 bg-stone-700 px-6 py-3 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-stone-600 active:translate-y-1 active:border-0"
+          >
+            <MaterialIcon name="arrow_back" className="text-base" />
+            Back
+          </Link>
 
           <section className="mb-8 grid gap-4 border-4 border-stone-800 bg-black/70 p-5 shadow-[8px_8px_0_0_rgba(0,0,0,0.75)] md:grid-cols-[7rem_1fr] md:p-6">
             <div className="mx-auto flex h-28 w-28 items-center justify-center overflow-hidden border-4 border-primary bg-stone-900 md:mx-0">
@@ -85,16 +87,30 @@ export default function ProfilePage() {
               </div>
               <div className="grid grid-cols-1 gap-3 text-xs uppercase tracking-wide sm:grid-cols-2">
                 <div className="border-2 border-stone-700 bg-stone-900/80 p-3">
-                  <div className="brick-sans text-stone-500">Rank</div>
+                  <div className="brick-sans text-stone-500">Advancement</div>
                   <div className="brick-sans mt-1 text-sm font-black text-green-400">
                     {user.rankLabel}
                   </div>
                 </div>
                 <div className="border-2 border-stone-700 bg-stone-900/80 p-3">
-                  <div className="brick-sans text-stone-500">Level</div>
+                  <div className="brick-sans text-stone-500">Player level</div>
                   <div className="brick-sans mt-1 text-sm font-black text-orange-300">
                     {user.level}
                   </div>
+                </div>
+              </div>
+              <div className="border-2 border-[#2d5a24] bg-[#142214] p-3">
+                <div className="brick-sans mb-2 text-[10px] font-black uppercase tracking-widest text-[#7bdc6a]">
+                  Experience bar
+                </div>
+                <div className="h-4 border-2 border-black bg-stone-950">
+                  <div
+                    className="h-full bg-[#58B13E]"
+                    style={{ width: `${xpFillPct}%` }}
+                  />
+                </div>
+                <div className="brick-sans mt-2 text-[10px] font-bold uppercase tracking-wide text-stone-500">
+                  {xpBar.intoLevel} / {xpBar.xpForNextLevel} XP — {user.totalExperience} orbs total
                 </div>
               </div>
             </div>
@@ -134,7 +150,7 @@ export default function ProfilePage() {
             </div>
           </section>
 
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
               onClick={() => void saveProfile()}
@@ -148,13 +164,6 @@ export default function ProfilePage() {
               <MaterialIcon name="save" className="text-base" />
               Save Profile
             </button>
-            <Link
-              href="/onboarding"
-              className="brick-sans inline-flex items-center gap-2 border-b-4 border-r-4 border-stone-800 bg-stone-700 px-6 py-3 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-stone-600 active:translate-y-1 active:border-0"
-            >
-              <MaterialIcon name="arrow_back" className="text-base" />
-              Back
-            </Link>
             {saved ? (
               <span className="brick-sans text-xs font-black uppercase tracking-wider text-primary">
                 Profile updated!

@@ -16,6 +16,7 @@ import {
   appendDebateResultToHistory,
   createOpponentVictoryByForfeitResult,
 } from "@/lib/data/history-storage";
+import { getUserProfileSnapshot } from "@/lib/data/profile-storage";
 import { finalizeDebateWithAi } from "@/lib/data/debate-finalize";
 import { wsdaStateFromElapsedSeconds } from "@/lib/debate/wsda-elapsed";
 import {
@@ -264,6 +265,7 @@ export function WsdaDebateProvider({
             debateFormat: session.debateFormat,
             arenaRoomId: roomId,
             selfUserId: user.id,
+            totalExperienceBefore: getUserProfileSnapshot().totalExperience,
           });
           await appendDebateResultToHistory(result);
           setOpponentWinResultId(result.id);

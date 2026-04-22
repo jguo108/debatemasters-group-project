@@ -67,6 +67,30 @@ export function DebateResultDetail({ r }: { r: DebateResult }) {
                   </span>
                 </div>
               </div>
+              <div className="mt-4 border-2 border-[#2d5a24] bg-[#1a2218] p-4">
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wide text-[#7bdc6a]">
+                    Experience orbs
+                  </span>
+                  <span className="text-lg font-black tabular-nums text-[#58B13E]">
+                    +{r.xpEarned} XP
+                  </span>
+                </div>
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-stone-400">
+                  Player level {r.level}
+                </div>
+                <div className="h-3 border-2 border-black bg-stone-950">
+                  <div
+                    className="h-full bg-[#58B13E] transition-[width] duration-300"
+                    style={{
+                      width: `${Math.min(100, Math.round((r.xpCurrent / Math.max(1, r.xpToNext)) * 100))}%`,
+                    }}
+                  />
+                </div>
+                <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                  {r.xpCurrent} / {r.xpToNext} toward next level
+                </div>
+              </div>
             </div>
           </div>
           <div className="mx-auto mt-0 h-6 w-3/4 border-x-8 border-black bg-stone-800 shadow-[0_4px_0_#000]" />

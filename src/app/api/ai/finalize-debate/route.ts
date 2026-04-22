@@ -2,6 +2,10 @@
 import { buildLocalAiJudgedResult } from "@/lib/data/ai-results";
 import type { AgeBand, DebateResult, DebateTranscriptEntry } from "@/lib/data/types";
 import { judgeDebateAndFeedback } from "@/lib/llm/tasks";
+import {
+  computeDebateExperienceReward,
+  progressionFieldsAfterMatch,
+} from "@/lib/progression/experience";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/browser-client";
 
@@ -87,7 +91,26 @@ async function persistArenaJudgement(input: {
   if (!row?.payload || typeof row.payload !== "object") {
     throw new Error("Arena judged result payload missing.");
   }
-  return row.payload;
+  const payload = row.payload as DebateResult;
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("total_experience")
+    .eq("id", user.id)
+    .maybeSingle();
+  const totalAfter = Number(prof?.total_experience ?? 0);
+  const xpEarned = computeDebateExperienceReward({
+    outcome: payload.outcome,
+    arenaRoomId: input.arenaRoomId,
+    scores: payload.scores,
+  });
+  const before = Math.max(0, totalAfter - xpEarned);
+  const prog = progressionFieldsAfterMatch({
+    totalExperienceBefore: before,
+    outcome: payload.outcome,
+    arenaRoomId: input.arenaRoomId,
+    scores: payload.scores,
+  });
+  return { ...payload, ...prog };
 }
 
 export async function POST(request: Request) {
@@ -144,6 +167,24 @@ export async function POST(request: Request) {
       });
     }
 
+    let totalExperienceBefore = 0;
+    try {
+      const supabase = await createServerSupabase();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("total_experience")
+          .eq("id", user.id)
+          .maybeSingle();
+        totalExperienceBefore = Number(prof?.total_experience ?? 0);
+      }
+    } catch {
+      /* guest or missing Supabase env */
+    }
+
     const result = buildLocalAiJudgedResult({
       sessionId,
       topicTitle,
@@ -151,6 +192,7 @@ export async function POST(request: Request) {
       transcript,
       debateFormat,
       judgement,
+      totalExperienceBefore,
     });
 
     return NextResponse.json({

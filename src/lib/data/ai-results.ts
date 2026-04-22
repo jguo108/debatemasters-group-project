@@ -1,4 +1,5 @@
 ﻿import type { DebateResult, DebateTranscriptEntry } from "@/lib/data/types";
+import { progressionFieldsAfterMatch } from "@/lib/progression/experience";
 
 export type AiJudgeSummary = {
   winner: "pro" | "con";
@@ -19,19 +20,11 @@ type BuildLocalJudgedResultInput = {
   transcript: DebateTranscriptEntry[];
   debateFormat?: "wsda";
   judgement: AiJudgeSummary;
+  /** Lifetime XP before this match (from `profiles` or guest snapshot). */
+  totalExperienceBefore?: number;
+  /** When set (e.g. arena), XP base matches live WSDA rewards. */
+  arenaRoomId?: string;
 };
-
-function baseXp(outcome: DebateResult["outcome"]): {
-  level: number;
-  xpCurrent: number;
-  xpToNext: number;
-  xpEarned: number;
-} {
-  if (outcome === "victory") {
-    return { level: 46, xpCurrent: 2820, xpToNext: 3200, xpEarned: 180 };
-  }
-  return { level: 45, xpCurrent: 2690, xpToNext: 3200, xpEarned: 90 };
-}
 
 export function buildLocalAiJudgedResult(
   input: BuildLocalJudgedResultInput,
@@ -40,7 +33,12 @@ export function buildLocalAiJudgedResult(
   const side = input.userRole === "con" ? "con" : "pro";
   const won = side === input.judgement.winner;
   const outcome: DebateResult["outcome"] = won ? "victory" : "effort";
-  const xp = baseXp(outcome);
+  const prog = progressionFieldsAfterMatch({
+    totalExperienceBefore: input.totalExperienceBefore ?? 0,
+    outcome,
+    arenaRoomId: input.arenaRoomId,
+    scores: input.judgement.scores,
+  });
   const confidencePct = Math.round(Math.max(0, Math.min(1, input.judgement.confidence)) * 100);
 
   return {
@@ -50,10 +48,7 @@ export function buildLocalAiJudgedResult(
     outcome,
     headline: won ? "AI JUDGE: VICTORY" : "AI JUDGE: REBUILD",
     subline: `Winner: ${input.judgement.winner.toUpperCase()} (${confidencePct}% confidence)`,
-    level: xp.level,
-    xpCurrent: xp.xpCurrent,
-    xpToNext: xp.xpToNext,
-    xpEarned: xp.xpEarned,
+    ...prog,
     feedback: `${input.judgement.feedback} Decision rationale: ${input.judgement.rationale}`,
     quote: input.judgement.quote,
     scores: {

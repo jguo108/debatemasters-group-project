@@ -215,11 +215,6 @@ export default function MatchmakingPage() {
               <h1 className="brick-sans mb-3 text-4xl font-black uppercase text-white drop-shadow-[5px_5px_0px_rgba(0,0,0,0.9)] md:text-5xl">
                 Finding a Debate Buddy...
               </h1>
-              <p className="font-body text-sm font-bold uppercase tracking-wide text-red-400 drop-shadow-[2px_2px_0px_rgba(0,0,0,0.8)]">
-                {isSupabaseConfigured()
-                  ? "Matching with another player in the queue"
-                  : "Scanning the crimson forests for worthy opponents"}
-              </p>
               {matchError ? (
                 <p className="mt-4 max-w-md text-center font-mono text-xs text-amber-400">
                   {matchError}
@@ -280,7 +275,7 @@ export default function MatchmakingPage() {
                   onClick={() => void cancelQueueAndGo("/onboarding")}
                   className="brick-sans border-t-2 border-l-2 border-red-900/50 bg-[#2d0d0d] px-10 py-4 font-black uppercase text-white shadow-[6px_6px_0px_0px_rgba(0,0,0,0.9)] transition-all duration-75 hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,0.9)] hover:translate-x-[3px] hover:translate-y-[3px] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none"
                 >
-                  Cancel Queue
+                  Cancel
                 </button>
               </div>
             ) : null}

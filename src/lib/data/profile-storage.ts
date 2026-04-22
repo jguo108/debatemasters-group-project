@@ -3,6 +3,10 @@
 import { useSyncExternalStore } from "react";
 import { mockUser } from "@/lib/data/mock/fixtures";
 import type { AgeBand, UserProfile } from "@/lib/data/types";
+import {
+  advancementTitleFromLevel,
+  levelFromTotalExperience,
+} from "@/lib/progression/experience";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
 
 export const PROFILE_STORAGE_KEY = "debate-profile-v1";
@@ -34,7 +38,7 @@ export function setAgeBandPreference(ageBand: AgeBand): void {
   window.localStorage.setItem(AGE_BAND_STORAGE_KEY, ageBand);
 }
 
-type ProfilePatch = Pick<UserProfile, "displayName" | "avatarUrl">;
+type ProfilePatch = Pick<UserProfile, "displayName" | "avatarUrl" | "totalExperience">;
 
 export const MINECRAFT_AVATAR_OPTIONS = [
   { id: "steve", label: "Steve", url: "https://mc-heads.net/avatar/Steve/96" },
@@ -67,11 +71,22 @@ export function pickMinecraftAvatarBySeed(seed: string): string {
   return MINECRAFT_AVATAR_OPTIONS[index]?.url ?? mockUser.avatarUrl;
 }
 
+function coerceTotalExperience(raw: unknown): number {
+  const n =
+    typeof raw === "number" && Number.isFinite(raw)
+      ? raw
+      : typeof raw === "string" && raw.trim() !== "" && Number.isFinite(Number(raw))
+        ? Number(raw)
+        : 0;
+  return Math.max(0, Math.min(Math.floor(n), 1_000_000_000_000));
+}
+
 function sanitizePatch(value: unknown): ProfilePatch {
   if (!value || typeof value !== "object") {
     return {
       displayName: mockUser.displayName,
       avatarUrl: mockUser.avatarUrl,
+      totalExperience: 0,
     };
   }
   const input = value as Record<string, unknown>;
@@ -83,7 +98,8 @@ function sanitizePatch(value: unknown): ProfilePatch {
     typeof input.avatarUrl === "string" && input.avatarUrl.trim().length > 0
       ? input.avatarUrl.trim()
       : mockUser.avatarUrl;
-  return { displayName, avatarUrl };
+  const totalExperience = coerceTotalExperience(input.totalExperience);
+  return { displayName, avatarUrl, totalExperience };
 }
 
 function readStoredPatch(): ProfilePatch | null {
@@ -98,10 +114,17 @@ function readStoredPatch(): ProfilePatch | null {
 }
 
 function buildSnapshotFromPatch(patch: ProfilePatch | null): UserProfile {
-  if (!patch) return mockUser;
+  if (!patch) return { ...mockUser };
+  const te = patch.totalExperience ?? 0;
+  const level = levelFromTotalExperience(te);
   return {
     ...mockUser,
-    ...patch,
+    id: mockUser.id,
+    displayName: patch.displayName,
+    avatarUrl: patch.avatarUrl,
+    totalExperience: te,
+    level,
+    rankLabel: advancementTitleFromLevel(level),
   };
 }
 
@@ -116,14 +139,17 @@ function rowToProfile(
     avatar_url: string;
     level: number;
     rank_label: string;
+    total_experience: number | null;
   },
 ): UserProfile {
+  const totalExperience = coerceTotalExperience(row.total_experience);
   return {
     id: row.id,
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
     level: row.level,
     rankLabel: row.rank_label,
+    totalExperience,
   };
 }
 
@@ -137,7 +163,7 @@ async function refreshProfileFromSupabase(): Promise<void> {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, display_name, avatar_url, level, rank_label")
+    .select("id, display_name, avatar_url, level, rank_label, total_experience")
     .eq("id", session.user.id)
     .maybeSingle();
 
@@ -147,6 +173,32 @@ async function refreshProfileFromSupabase(): Promise<void> {
 
   cachedProfileSnapshot = rowToProfile(data);
   cachedStorageRaw = "__remote__";
+  notifyProfile();
+}
+
+/** Reload profile from Supabase after server-side XP changes (e.g. new debate_results row). */
+export async function refreshUserProfileFromServer(): Promise<void> {
+  await refreshProfileFromSupabase();
+}
+
+/** Guest / localStorage only: apply XP after a debate (authed users earn XP on the server). */
+export function applyGuestExperienceDelta(delta: number): void {
+  if (typeof window === "undefined" || delta <= 0) return;
+  ensureAuthListener();
+  if (cachedStorageRaw === "__remote__") return;
+
+  const patch = readStoredPatch();
+  const base = buildSnapshotFromPatch(patch);
+  const nextTotal = Math.max(0, base.totalExperience + delta);
+  const nextPatch = sanitizePatch({
+    displayName: base.displayName,
+    avatarUrl: base.avatarUrl,
+    totalExperience: nextTotal,
+  });
+  const serialized = JSON.stringify(nextPatch);
+  window.localStorage.setItem(PROFILE_STORAGE_KEY, serialized);
+  cachedStorageRaw = serialized;
+  cachedProfileSnapshot = buildSnapshotFromPatch(nextPatch);
   notifyProfile();
 }
 
@@ -200,6 +252,7 @@ export async function updateUserProfile(
   const nextPatch = sanitizePatch({
     displayName: patch.displayName ?? current.displayName,
     avatarUrl: patch.avatarUrl ?? current.avatarUrl,
+    totalExperience: patch.totalExperience ?? current.totalExperience,
   });
 
   if (isSupabaseConfigured()) {
@@ -218,11 +271,14 @@ export async function updateUserProfile(
       if (!error) {
         cachedProfileSnapshot = {
           ...current,
-          ...nextPatch,
+          displayName: nextPatch.displayName,
+          avatarUrl: nextPatch.avatarUrl,
+          totalExperience: current.totalExperience,
           id: session.user.id,
         };
         cachedStorageRaw = "__remote__";
         notifyProfile();
+        void refreshProfileFromSupabase();
         return cachedProfileSnapshot;
       }
     }
@@ -231,10 +287,7 @@ export async function updateUserProfile(
   const raw = JSON.stringify(nextPatch);
   window.localStorage.setItem(PROFILE_STORAGE_KEY, raw);
   cachedStorageRaw = raw;
-  cachedProfileSnapshot = {
-    ...mockUser,
-    ...nextPatch,
-  };
+  cachedProfileSnapshot = buildSnapshotFromPatch(nextPatch);
   notifyProfile();
   return cachedProfileSnapshot;
 }
@@ -243,14 +296,12 @@ function initLocalGuestProfile(): UserProfile {
   const nextPatch: ProfilePatch = {
     displayName: mockUser.displayName,
     avatarUrl: randomMinecraftAvatarUrl(),
+    totalExperience: 0,
   };
   const serialized = JSON.stringify(nextPatch);
   window.localStorage.setItem(PROFILE_STORAGE_KEY, serialized);
   cachedStorageRaw = serialized;
-  cachedProfileSnapshot = {
-    ...mockUser,
-    ...nextPatch,
-  };
+  cachedProfileSnapshot = buildSnapshotFromPatch(nextPatch);
   notifyProfile();
   return cachedProfileSnapshot;
 }
@@ -269,14 +320,12 @@ export function ensureUserProfileInitialized(): UserProfile {
     const migratedPatch: ProfilePatch = {
       displayName: current.displayName,
       avatarUrl: randomMinecraftAvatarUrl(),
+      totalExperience: current.totalExperience,
     };
     const migratedRaw = JSON.stringify(migratedPatch);
     window.localStorage.setItem(PROFILE_STORAGE_KEY, migratedRaw);
     cachedStorageRaw = migratedRaw;
-    cachedProfileSnapshot = {
-      ...mockUser,
-      ...migratedPatch,
-    };
+    cachedProfileSnapshot = buildSnapshotFromPatch(migratedPatch);
     notifyProfile();
     return cachedProfileSnapshot;
   }

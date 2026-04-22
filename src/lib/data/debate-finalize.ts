@@ -5,8 +5,12 @@ import {
   readActiveDebateTranscript,
   type ForfeitMeta,
 } from "@/lib/data/history-storage";
-import { getAgeBandPreference } from "@/lib/data/profile-storage";
+import {
+  getAgeBandPreference,
+  refreshUserProfileFromServer,
+} from "@/lib/data/profile-storage";
 import type { DebateResult } from "@/lib/data/types";
+import { isSupabaseConfigured } from "@/lib/supabase/browser-client";
 
 type FinalizeDebateOutcome =
   | { ok: true; resultId: string }
@@ -47,6 +51,8 @@ export async function finalizeDebateWithAi(
 
   if (!data.persisted) {
     await appendDebateResultToHistory(data.result);
+  } else if (isSupabaseConfigured()) {
+    await refreshUserProfileFromServer();
   }
 
   return { ok: true, resultId: data.result.id };
