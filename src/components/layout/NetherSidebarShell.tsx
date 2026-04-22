@@ -22,7 +22,9 @@ export function NetherSidebarShell({
       </aside>
       <MobileBackdrop open={open} onClose={() => setOpen(false)} />
       <MobileMenuButton open={open} onToggle={() => setOpen((v) => !v)} />
-      <div className="relative z-10 min-h-screen w-full md:ml-64">{children}</div>
+      <div className="relative z-10 min-h-screen w-full min-w-0 md:ml-64 md:w-[calc(100%-16rem)]">
+        {children}
+      </div>
     </>
   );
 }
