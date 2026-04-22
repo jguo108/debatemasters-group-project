@@ -40,17 +40,6 @@ export default function TopicsPage() {
               <MaterialIcon name="arrow_back" className="text-lg text-[#58B13E]" />
               BACK
             </Link>
-            <footer className="mb-12 border-l-8 border-secondary-fixed bg-stone-800/50 p-8">
-              <div>
-                <p className="mb-2 font-headline-pixel text-[8px] font-bold uppercase tracking-widest text-stone-300">
-                  Architect&apos;s Tip
-                </p>
-                <p className="font-headline-pixel text-sm font-bold uppercase leading-relaxed text-white">
-                  Choose a topic you feel passionate about. The strongest
-                  structures are built on the most solid convictions.
-                </p>
-              </div>
-            </footer>
             <section className="mb-8 border-l-8 border-primary-fixed bg-stone-900/70 p-5">
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:items-start">
                 <div>
