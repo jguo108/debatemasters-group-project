@@ -28,14 +28,14 @@ export default function OnboardingPage() {
   return (
     <div className="theme-nether-dark selection:bg-[#58B13E] selection:text-black relative min-h-screen overflow-x-hidden bg-[#1A0806] font-[family-name:var(--font-inter)] text-white nether-bg-onboarding">
       <NetherSidebarShell sidebar={<OnboardingSidebar />}>
-        <main className="flex min-h-screen flex-col items-center justify-center p-6 md:p-12">
-          <div className="grid w-full max-w-5xl grid-cols-1 items-start gap-12 lg:grid-cols-12">
-            <div className="space-y-6 lg:col-span-4">
+        <main className="flex min-h-screen min-w-0 flex-col items-center px-4 py-10 sm:px-6 md:px-10 md:py-14 lg:px-12 lg:py-16 xl:px-14">
+          <div className="grid w-full min-w-0 max-w-5xl grid-cols-1 items-start gap-10 md:gap-12 lg:grid-cols-12 xl:max-w-6xl 2xl:max-w-7xl">
+            <div className="min-w-0 space-y-6 lg:col-span-4">
               <h1 className="brick-sans text-4xl font-black uppercase leading-none tracking-tighter text-white drop-shadow-[4px_4px_0px_rgba(0,0,0,0.8)] md:text-5xl">
                 CHOOSE <br />
                 YOUR <span className="text-[#58B13E]">PATH</span>
               </h1>
-              <p className="max-w-xs border-l-4 border-[#58B13E] pl-4 text-lg leading-relaxed text-[#b8b8b8]">
+              <p className="max-w-prose border-l-4 border-[#58B13E] pl-4 text-base leading-relaxed text-[#b8b8b8] sm:text-lg">
                 The bedrock of every great debater is their journey. Select the
                 mode that matches your energy.
               </p>
@@ -72,8 +72,8 @@ export default function OnboardingPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:col-span-8">
-              <div className="group relative border-4 border-[#5c3530] bg-[#2D1B19] p-1 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.45)] transition-transform hover:-translate-y-1">
+            <div className="grid min-w-0 grid-cols-1 gap-8 md:grid-cols-2 lg:col-span-8">
+              <div className="group relative min-w-0 border-4 border-[#5c3530] bg-[#2D1B19] p-1 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.45)] transition-transform hover:-translate-y-1">
                 <div className="space-y-4 bg-[#2D1B19] p-6">
                   <div className="relative flex aspect-square items-center justify-center overflow-hidden border-b-4 border-black bg-[#dce8e0]">
                     <img
@@ -95,7 +95,7 @@ export default function OnboardingPage() {
                     <Link
                       href="/topics"
                       prefetch={false}
-                      className="brick-sans block w-full border-b-4 border-r-4 border-[#1565C0] bg-[#2196F3] py-4 text-center font-black uppercase tracking-widest text-black transition-all hover:brightness-110 active:translate-y-1 active:border-0"
+                      className="brick-sans block w-full border-b-4 border-r-4 border-[#1565C0] bg-[#2196F3] px-2 py-4 text-center text-xs font-black uppercase tracking-wide text-black transition-all hover:brightness-110 active:translate-y-1 active:border-0 sm:text-sm sm:tracking-widest"
                     >
                       SELECT SOLO
                     </Link>
@@ -103,7 +103,7 @@ export default function OnboardingPage() {
                 </div>
               </div>
 
-              <div className="group relative border-4 border-[#58B13E] bg-[#2D1B19] p-1 shadow-[8px_8px_0px_0px_rgba(88,177,62,0.25)] transition-transform hover:-translate-y-1">
+              <div className="group relative min-w-0 border-4 border-[#58B13E] bg-[#2D1B19] p-1 shadow-[8px_8px_0px_0px_rgba(88,177,62,0.25)] transition-transform hover:-translate-y-1">
                 <div className="space-y-4 bg-[#2D1B19] p-6">
                   <div className="relative flex aspect-square items-center justify-center overflow-hidden border-b-4 border-black bg-[#1a1518]">
                     <img
@@ -128,7 +128,7 @@ export default function OnboardingPage() {
                     <Link
                       href="/arena/setup"
                       prefetch={false}
-                      className="brick-sans block w-full border-b-4 border-r-4 border-[#3d8a2e] bg-[#58B13E] py-4 text-center font-black uppercase tracking-widest text-white transition-all hover:brightness-110 active:translate-y-1 active:border-0"
+                      className="brick-sans block w-full border-b-4 border-r-4 border-[#3d8a2e] bg-[#58B13E] px-2 py-4 text-center text-xs font-black uppercase tracking-wide text-white transition-all hover:brightness-110 active:translate-y-1 active:border-0 sm:text-sm sm:tracking-widest"
                     >
                       ENTER ARENA
                     </Link>
