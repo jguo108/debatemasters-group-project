@@ -14,7 +14,7 @@ export function NetherSidebarShell({
   return (
     <>
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-full w-64 flex-col border-r-4 border-stone-800 bg-black shadow-[4px_0px_0px_0px_rgba(0,0,0,0.5)] transition-transform md:translate-x-0 ${
+        className={`fixed left-0 top-0 z-[48] flex h-full w-64 flex-col border-r-4 border-stone-800 bg-black shadow-[4px_0px_0px_0px_rgba(0,0,0,0.5)] transition-transform md:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
