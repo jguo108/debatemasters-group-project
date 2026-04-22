@@ -7,32 +7,19 @@ import type { DebateResult } from "@/lib/data/types";
 const sans =
   "font-[family-name:var(--font-inter)] antialiased text-pretty" as const;
 
-const headlineTitleClass =
-  "brick-sans text-3xl font-black uppercase leading-none tracking-tighter text-white drop-shadow-[4px_4px_0px_rgba(0,0,0,0.8)] md:text-5xl";
+const topicTitleClass =
+  "font-headline-pixel text-balance text-base font-black uppercase tracking-tight text-white drop-shadow-[3px_3px_0px_rgba(0,0,0,0.75)] !leading-[1.9] sm:text-lg sm:!leading-[2] md:text-xl md:!leading-[2.1]";
 
-function ResultHeadline({ headline }: { headline: string }) {
-  const words = headline.trim().split(/\s+/);
-  if (words.length <= 1) {
-    return <h1 className={headlineTitleClass}>{headline}</h1>;
-  }
-  const last = words.pop()!;
-  const rest = words.join(" ");
-  return (
-    <h1 className={headlineTitleClass}>
-      {rest} <br />
-      <span className="text-[#58B13E]">{last}</span>
-    </h1>
-  );
+/** Main hero on result page — topic only (Press Start / Minecraft-style pixel font). */
+function ResultTopicTitle({ topicTitle }: { topicTitle: string }) {
+  return <h1 className={topicTitleClass}>{topicTitle}</h1>;
 }
 
 export function DebateResultDetail({ r }: { r: DebateResult }) {
   return (
     <div className={`relative z-20 mx-auto max-w-5xl p-8 md:p-12 ${sans}`}>
-      <div className="mb-12 text-center">
-        <ResultHeadline headline={r.headline} />
-        <p className="mt-4 text-sm font-medium uppercase tracking-wide text-stone-400 md:mt-6">
-          {r.topicTitle}
-        </p>
+      <div className="mx-auto mb-12 max-w-4xl text-center">
+        <ResultTopicTitle topicTitle={r.topicTitle} />
       </div>
 
       <div className="grid grid-cols-1 items-start gap-10 md:grid-cols-12">
