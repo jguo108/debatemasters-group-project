@@ -17,10 +17,15 @@ export interface TopicCategory {
   title: string;
   description: string;
   badge: string;
-  icon: "bolt" | "pets" | "rocket_launch" | "memory" | "eco";
+  icon:
+    | "bolt"
+    | "pets"
+    | "rocket_launch"
+    | "memory"
+    | "eco"
+    | "school"
+    | "groups";
   accent: "primary" | "tertiary";
-  wide?: boolean;
-  backgroundImageUrl?: string;
 }
 
 export interface DebateSession {

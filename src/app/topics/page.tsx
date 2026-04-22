@@ -1,30 +1,58 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { NetherSidebarShell } from "@/components/layout/NetherSidebarShell";
 import { OnboardingSidebar } from "@/components/sidebars/OnboardingSidebar";
 import { MaterialIcon } from "@/components/MaterialIcon";
+import {
+  isSoloTopicAreaId,
+  pickDifferentSoloTopic,
+  pickRandomTopicFromPool,
+  type SoloTopicAreaId,
+} from "@/lib/debate/solo-area-topic-pools";
 import { getMockTopics } from "@/lib/data/repository";
-import type { TopicCategory } from "@/lib/data/types";
+import { getAgeBandPreference } from "@/lib/data/profile-storage";
 
 function TopicIcon({ name, className }: { name: string; className?: string }) {
   return <MaterialIcon name={name} className={className} />;
 }
 
-function shadowFor(accent: TopicCategory["accent"]) {
-  return accent === "tertiary"
-    ? "shadow-[0px_4px_0px_0px_#00497d] hover:shadow-[0px_2px_0px_0px_#00497d]"
-    : "shadow-[0px_4px_0px_0px_#085300] hover:shadow-[0px_2px_0px_0px_#085300]";
-}
+const topicCardGoShadow =
+  "shadow-[0px_4px_0px_0px_#00497d] hover:shadow-[0px_2px_0px_0px_#00497d]";
 
 export default function TopicsPage() {
-  const topics = getMockTopics();
+  const topics = useMemo(() => getMockTopics(), []);
   const [soloRole, setSoloRole] = useState<"pro" | "con">("pro");
   const [soloDurationMinutes, setSoloDurationMinutes] = useState<
     1 | 3 | 5 | 10 | 15
   >(5);
   const durationOptions: Array<1 | 3 | 5 | 10 | 15> = [1, 3, 5, 10, 15];
+
+  const [soloTopicLines, setSoloTopicLines] = useState<Partial<Record<string, string>>>(
+    {},
+  );
+  const [soloTopicsReady, setSoloTopicsReady] = useState(false);
+
+  useEffect(() => {
+    const band = getAgeBandPreference();
+    const next: Record<string, string> = {};
+    for (const t of topics) {
+      if (isSoloTopicAreaId(t.id)) {
+        next[t.id] = pickRandomTopicFromPool(t.id, band);
+      }
+    }
+    setSoloTopicLines(next);
+    setSoloTopicsReady(true);
+  }, [topics]);
+
+  const rerollSoloTopic = useCallback((areaId: SoloTopicAreaId) => {
+    const band = getAgeBandPreference();
+    setSoloTopicLines((prev) => ({
+      ...prev,
+      [areaId]: pickDifferentSoloTopic(areaId, band, prev[areaId] ?? ""),
+    }));
+  }, []);
 
   return (
     <div className="bg-background font-[family-name:var(--font-inter)] text-on-background selection:bg-primary selection:text-white">
@@ -97,115 +125,93 @@ export default function TopicsPage() {
                 </div>
               </div>
             </section>
-            <div className="mb-16 grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
-              {topics.map((t) => {
+            <div className="mb-16 flex flex-col gap-8">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                {topics.map((t) => {
+                const line = soloTopicLines[t.id];
+                const debateHref =
+                  soloTopicsReady && line
+                    ? `/debate?topic=custom&title=${encodeURIComponent(line)}&role=${soloRole}&duration=${soloDurationMinutes}`
+                    : null;
+
                 const inner = (
                   <>
-                    <div
-                      className={`absolute top-0 right-0 flex h-16 w-16 items-center justify-center ${
-                        t.accent === "tertiary"
-                          ? "bg-tertiary-container/20"
-                          : t.id === "superheroes" || t.id === "animals"
-                            ? "bg-primary-container/20"
-                            : "bg-secondary-container/20"
-                      }`}
-                    >
+                    <div className="absolute top-0 right-0 flex h-16 w-16 items-center justify-center bg-tertiary-container/20">
                       <TopicIcon
                         name={t.icon}
                         className={`text-4xl ${
-                          t.id === "climate"
-                            ? "text-primary"
-                            : t.accent === "tertiary"
-                              ? "text-tertiary"
-                              : t.id === "animals"
-                                ? "text-secondary"
-                                : "text-primary-fixed"
+                          t.id === "village-hall" ? "text-primary" : "text-tertiary"
                         }`}
                       />
                     </div>
                     <div>
-                      <div
-                        className={`${t.accent === "tertiary" ? "bg-tertiary" : "bg-primary"} mb-4 inline-block px-3 py-1`}
-                      >
+                      <div className="mb-4 inline-block bg-tertiary px-3 py-1">
                         <span className="font-headline-pixel text-[8px] font-black uppercase tracking-tighter text-white">
                           {t.badge}
                         </span>
                       </div>
-                      <h3
-                        className={`font-headline-pixel font-black uppercase leading-tight text-on-surface ${
-                          t.wide ? "mb-2 text-3xl" : "mb-2 text-xl"
-                        }`}
-                      >
+                      <h3 className="mb-2 font-headline-pixel text-xl font-black uppercase leading-tight text-on-surface">
                         {t.title}
                       </h3>
-                      <p
-                        className={`font-headline-pixel font-bold leading-relaxed text-on-surface-variant ${
-                          t.wide ? "max-w-sm text-[12px]" : "text-[10px]"
-                        }`}
-                      >
-                        {t.description}
+                      <p className="min-h-[3.25rem] font-headline-pixel text-[10px] font-bold leading-relaxed text-on-surface-variant">
+                        {!soloTopicsReady ? (
+                          <span className="text-on-surface-variant/50">Loading topic…</span>
+                        ) : (
+                          line
+                        )}
                       </p>
                     </div>
                   </>
                 );
 
-                const btn =
-                  t.accent === "tertiary" ? (
-                    <Link
-                      href={`/debate?topic=${encodeURIComponent(t.id)}&role=${soloRole}&duration=${soloDurationMinutes}`}
-                      className={`relative flex items-center justify-center gap-2 bg-tertiary py-3 px-6 font-headline-pixel font-black text-white transition-all hover:translate-y-[2px] active:translate-y-[4px] active:shadow-none ${shadowFor("tertiary")} text-[10px]`}
-                    >
-                      GO <TopicIcon name="play_arrow" className="text-sm" />
-                    </Link>
-                  ) : (
-                    <Link
-                      href={`/debate?topic=${encodeURIComponent(t.id)}&role=${soloRole}&duration=${soloDurationMinutes}`}
-                      className={`relative flex items-center justify-center gap-2 bg-primary py-3 px-6 font-headline-pixel font-black text-white transition-all hover:translate-y-[2px] active:translate-y-[4px] active:shadow-none ${shadowFor("primary")} ${
-                        t.wide ? "py-4 px-12 text-sm" : "text-[10px]"
-                      }`}
-                    >
-                      GO{" "}
-                      {t.wide ? (
-                        <TopicIcon name="rocket_launch" />
-                      ) : (
-                        <TopicIcon name="play_arrow" className="text-sm" />
-                      )}
-                    </Link>
-                  );
+                const canReroll = soloTopicsReady && isSoloTopicAreaId(t.id);
 
-                if (t.wide) {
+                const btn = debateHref ? (
+                  <Link
+                    href={debateHref}
+                    className={`relative flex w-full items-center justify-center gap-2 bg-tertiary py-3 px-6 font-headline-pixel text-[10px] font-black text-white transition-all hover:translate-y-[2px] active:translate-y-[4px] active:shadow-none ${topicCardGoShadow}`}
+                  >
+                    GO <TopicIcon name="play_arrow" className="text-sm" />
+                  </Link>
+                ) : (
+                  <span
+                    className={`relative flex w-full cursor-not-allowed items-center justify-center gap-2 bg-stone-600 py-3 px-6 font-headline-pixel text-[10px] font-black text-stone-300 ${topicCardGoShadow}`}
+                  >
+                    GO <TopicIcon name="play_arrow" className="text-sm" />
+                  </span>
+                );
+
                   return (
                     <div
                       key={t.id}
-                      className="group relative flex h-80 flex-col justify-between overflow-hidden border-b-8 border-r-8 border-stone-950 bg-surface-container-low p-6 voxel-glow transition-all hover:-translate-y-1 active:translate-y-1 md:col-span-2"
+                      className="group relative flex min-h-[22rem] flex-col justify-between border-b-8 border-r-8 border-stone-950 bg-surface-container-low p-6 voxel-glow transition-all hover:-translate-y-1 active:translate-y-1"
                     >
-                      {t.backgroundImageUrl ? (
-                        <div className="absolute inset-0 z-0 opacity-10">
-                          <img
-                            alt=""
-                            className="h-full w-full object-cover grayscale"
-                            src={t.backgroundImageUrl}
-                          />
-                        </div>
-                      ) : null}
-                      <div className="relative z-10">{inner}</div>
-                      <div className="relative z-10 flex justify-end">{btn}</div>
+                      {inner}
+                      <div className="mt-3 flex flex-col gap-2">
+                        <button
+                          type="button"
+                          disabled={!canReroll}
+                          onClick={() => {
+                            if (isSoloTopicAreaId(t.id)) rerollSoloTopic(t.id);
+                          }}
+                          className={`inline-flex items-center justify-center gap-1 border-2 border-tertiary bg-transparent px-3 py-2 font-headline-pixel text-[8px] font-black uppercase tracking-tight text-tertiary transition-all ${
+                            canReroll
+                              ? "hover:bg-tertiary/10 active:translate-y-px"
+                              : "cursor-not-allowed opacity-40"
+                          }`}
+                          aria-label={`Pick another random topic for ${t.title}`}
+                        >
+                          <MaterialIcon name="refresh" className="text-sm" />
+                          New topic
+                        </button>
+                        {btn}
+                      </div>
                     </div>
                   );
-                }
+                })}
+              </div>
 
-                return (
-                  <div
-                    key={t.id}
-                    className="group relative flex h-80 flex-col justify-between border-b-8 border-r-8 border-stone-950 bg-surface-container-low p-6 voxel-glow transition-all hover:-translate-y-1 active:translate-y-1"
-                  >
-                    {inner}
-                    <div>{btn}</div>
-                  </div>
-                );
-              })}
-
-              <div className="voxel-glow relative flex flex-col gap-6 overflow-hidden border-4 border-primary bg-stone-900 p-8 md:col-span-2">
+              <div className="voxel-glow relative flex flex-col gap-6 overflow-hidden border-4 border-primary bg-stone-900 p-8">
                 <div className="absolute -bottom-4 -right-4 flex h-32 w-32 rotate-12 items-center justify-center bg-primary/20">
                   <MaterialIcon
                     name="edit_note"
