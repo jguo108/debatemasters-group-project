@@ -15,6 +15,7 @@ import type { DebateSession } from "@/lib/data/types";
 import {
   appendDebateResultToHistory,
   createOpponentVictoryByForfeitResult,
+  type ForfeitMeta,
 } from "@/lib/data/history-storage";
 import { getUserProfileSnapshot } from "@/lib/data/profile-storage";
 import { finalizeDebateWithAi } from "@/lib/data/debate-finalize";
@@ -232,9 +233,13 @@ export function WsdaDebateProvider({
   const [opponentWinResultId, setOpponentWinResultId] = useState<string | null>(
     null,
   );
-  const [aiResultId, setAiResultId] = useState<string | null>(null);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [isResolvingComplete, setIsResolvingComplete] = useState(false);
+  const [completeResolveError, setCompleteResolveError] = useState<
+    string | null
+  >(null);
   const opponentForfeitHandledRef = useRef(false);
-  const aiFinalizeStartedRef = useRef(false);
+  const completeModalShownRef = useRef(false);
 
   useEffect(() => {
     const roomId = session.arenaRoomId;
@@ -321,40 +326,10 @@ export function WsdaDebateProvider({
   useEffect(() => {
     if (!isComplete) return;
     if (opponentForfeitHandledRef.current) return;
-    if (aiFinalizeStartedRef.current) return;
-    if (aiResultId) return;
-    aiFinalizeStartedRef.current = true;
-    void (async () => {
-      const judged = await finalizeDebateWithAi({
-        sessionId: session.id,
-        topicTitle: session.topicTitle,
-        opponentName: session.opponentName,
-        userRole: session.userRole,
-        debateFormat: session.debateFormat,
-        arenaRoomId: session.arenaRoomId,
-      });
-      if (judged.ok) {
-        setAiResultId(judged.resultId);
-        return;
-      }
-      aiFinalizeStartedRef.current = false;
-      console.warn("WSDA AI finalize failed:", judged.error);
-    })();
-  }, [
-    aiResultId,
-    isComplete,
-    session.arenaRoomId,
-    session.debateFormat,
-    session.id,
-    session.opponentName,
-    session.topicTitle,
-    session.userRole,
-  ]);
-
-  useEffect(() => {
-    if (!aiResultId) return;
-    router.push(`/results/${encodeURIComponent(aiResultId)}`);
-  }, [aiResultId, router]);
+    if (completeModalShownRef.current) return;
+    completeModalShownRef.current = true;
+    setShowCompleteModal(true);
+  }, [isComplete]);
 
   const phase = WSDA_PHASES[phaseIndex];
 
@@ -417,6 +392,25 @@ export function WsdaDebateProvider({
     ],
   );
 
+  const sessionMeta = useMemo(
+    (): ForfeitMeta => ({
+      sessionId: session.id,
+      topicTitle: session.topicTitle,
+      opponentName: session.opponentName,
+      userRole: session.userRole,
+      debateFormat: session.debateFormat ?? "wsda",
+      arenaRoomId: session.arenaRoomId,
+    }),
+    [
+      session.id,
+      session.topicTitle,
+      session.opponentName,
+      session.userRole,
+      session.debateFormat,
+      session.arenaRoomId,
+    ],
+  );
+
   return (
     <WsdaDebateContext.Provider value={value}>
       <OpponentExitNoticeModal
@@ -430,6 +424,67 @@ export function WsdaDebateProvider({
           setOpponentWinResultId(null);
         }}
       />
+      {showCompleteModal ? (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Debate time is up"
+            className="w-full max-w-md border-4 border-red-900 bg-[#1a0505] p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.8)] md:p-5"
+          >
+            <p className="pixel-text-xs font-black uppercase tracking-wide text-orange-500">
+              Time Is Up
+            </p>
+            <p className="pixel-text-xs mt-3 leading-relaxed text-stone-200 normal-case">
+              The WSDA round has ended. Click OK to resolve results.
+            </p>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                disabled={isResolvingComplete}
+                onClick={() => {
+                  if (isResolvingComplete) return;
+                  setIsResolvingComplete(true);
+                  setCompleteResolveError(null);
+                  void (async () => {
+                    try {
+                      for (let attempt = 0; attempt < 3; attempt += 1) {
+                        const judged = await finalizeDebateWithAi(sessionMeta);
+                        if (judged.ok) {
+                          router.push(
+                            `/results/${encodeURIComponent(judged.resultId)}`,
+                          );
+                          return;
+                        }
+                        if (attempt < 2) {
+                          await new Promise((resolve) =>
+                            window.setTimeout(resolve, 800),
+                          );
+                        } else {
+                          setCompleteResolveError(
+                            judged.error ||
+                              "Could not resolve AI judgment yet. Please try again.",
+                          );
+                        }
+                      }
+                    } finally {
+                      setIsResolvingComplete(false);
+                    }
+                  })();
+                }}
+                className="border-b-4 border-orange-900 bg-orange-600 px-4 py-2 pixel-text-xs font-black uppercase text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,0.45)] transition-all enabled:hover:bg-orange-500 enabled:active:translate-y-1 enabled:active:shadow-none disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isResolvingComplete ? "Loading..." : "OK"}
+              </button>
+            </div>
+            {completeResolveError ? (
+              <p className="pixel-text-xs mt-3 leading-relaxed text-amber-300 normal-case">
+                {completeResolveError}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       {children}
     </WsdaDebateContext.Provider>
   );
