@@ -5,11 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { MaterialIcon } from "../MaterialIcon";
-import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
+import { isSupabaseConfigured } from "@/lib/supabase/browser-client";
 import type { ForfeitMeta } from "@/lib/data/history-storage";
 import { recordDebaterExit } from "@/lib/data/debater-exit";
 import { DebateEndConfirmModal } from "@/components/debate/DebateEndConfirmModal";
 import {
+  clearLocalProfileCacheAfterSignOut,
   ensureUserProfileInitialized,
   useUserProfile,
 } from "@/lib/data/profile-storage";
@@ -116,7 +117,9 @@ export function OnboardingSidebar({
               }
               e.preventDefault();
               if (isSupabaseConfigured()) {
-                await createClient().auth.signOut();
+                clearLocalProfileCacheAfterSignOut();
+                window.location.href = "/auth/sign-out";
+                return;
               }
               window.location.href = "/login";
             }}
@@ -155,7 +158,9 @@ export function OnboardingSidebar({
               destination = pendingExitHref ?? "/results";
             }
             if (destination === "/login" && isSupabaseConfigured()) {
-              await createClient().auth.signOut();
+              clearLocalProfileCacheAfterSignOut();
+              window.location.href = "/auth/sign-out";
+              return;
             }
             router.push(destination);
           } finally {

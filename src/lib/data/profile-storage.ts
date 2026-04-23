@@ -132,6 +132,19 @@ function notifyProfile(): void {
   profileListeners.forEach((listener) => listener());
 }
 
+/** Clears guest/local profile storage so UI does not show a stale identity after Supabase sign-out. */
+export function clearLocalProfileCacheAfterSignOut(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+  } catch {
+    /* ignore private mode / quota */
+  }
+  cachedStorageRaw = null;
+  cachedProfileSnapshot = { ...mockUser };
+  notifyProfile();
+}
+
 function rowToProfile(
   row: {
     id: string;
@@ -218,9 +231,7 @@ function ensureAuthListener(): void {
       void refreshProfileFromSupabase();
     }
     if (event === "SIGNED_OUT") {
-      cachedProfileSnapshot = buildSnapshotFromPatch(readStoredPatch());
-      cachedStorageRaw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-      notifyProfile();
+      clearLocalProfileCacheAfterSignOut();
     }
   });
 }

@@ -1,27 +1,26 @@
 ﻿import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { DEBATEMASTER_PATH_HEADER } from "@/lib/auth/path-header";
 
-/** Paths that require a signed-in user (prefix match: `/x` matches `/x`, `/x/y`, …). */
-const AUTH_REQUIRED_PREFIXES = ["/onboarding"] as const;
-
-function isAuthRequiredPath(pathname: string): boolean {
-  return AUTH_REQUIRED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-}
-
-function isPublicAuthPath(pathname: string): boolean {
-  return (
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/register") ||
-    pathname.startsWith("/reset-password")
-  );
+/** Only these URL prefixes (plus `/` exactly) are reachable without a Supabase session. */
+function isPublicPath(pathname: string): boolean {
+  if (pathname === "/") return true;
+  if (pathname.startsWith("/login")) return true;
+  if (pathname.startsWith("/register")) return true;
+  if (pathname.startsWith("/reset-password")) return true;
+  if (pathname.startsWith("/auth/")) return true;
+  return false;
 }
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
+  const pathname = request.nextUrl.pathname;
+  const headersWithPath = new Headers(request.headers);
+  headersWithPath.set(DEBATEMASTER_PATH_HEADER, pathname);
+  const requestWithPath = new NextRequest(request.url, {
+    headers: headersWithPath,
   });
+
+  let supabaseResponse = NextResponse.next({ request: requestWithPath });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -32,15 +31,13 @@ export async function updateSession(request: NextRequest) {
   const supabase = createServerClient(url, key, {
     cookies: {
       getAll() {
-        return request.cookies.getAll();
+        return requestWithPath.cookies.getAll();
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) =>
-          request.cookies.set(name, value),
+          requestWithPath.cookies.set(name, value),
         );
-        supabaseResponse = NextResponse.next({
-          request,
-        });
+        supabaseResponse = NextResponse.next({ request: requestWithPath });
         cookiesToSet.forEach(({ name, value, options }) =>
           supabaseResponse.cookies.set(name, value, options),
         );
@@ -52,12 +49,10 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
-  if (
-    user === null &&
-    isAuthRequiredPath(pathname) &&
-    !isPublicAuthPath(pathname)
-  ) {
+  if (!user && !isPublicPath(pathname)) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const loginUrl = new URL("/login", request.url);
     const returnTo = `${pathname}${request.nextUrl.search}`;
     loginUrl.searchParams.set("redirect", returnTo);
