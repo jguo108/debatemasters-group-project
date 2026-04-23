@@ -116,7 +116,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
             <section className="col-span-12 border-r-4 border-red-950 bg-[#2a0808]/90 p-6 backdrop-blur-sm lg:col-span-3">
               <h2 className="pixel-text-base mb-8 flex items-center gap-2 font-black uppercase text-red-100">
                 <MaterialIcon name="menu_book" className="text-orange-500" />
-                WSDA Round
+                WSDA Rules
               </h2>
               <div className="space-y-4">
                 <div className="border-2 border-red-900 bg-black/60 p-4 shadow-[4px_4px_0px_0px_#7f1d1d]">
