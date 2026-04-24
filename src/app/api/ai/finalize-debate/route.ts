@@ -184,6 +184,71 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!arenaRoomId) {
+      let soloJudgement = await judgeDebateAndFeedback({
+        topicTitle,
+        debateFormat,
+        userRole,
+        ageBand,
+        transcript,
+      });
+      if (!hasEnoughContent) {
+        const sharedFeedback = lowContentFallbackFeedback(ageBand);
+        const sharedQuote =
+          ageBand === "under10"
+            ? "Short, clear reasons help judges understand your side."
+            : "Clear claims plus evidence create judgeable rounds.";
+        soloJudgement = {
+          ...soloJudgement,
+          rationale: "Insufficient substantive debate content for full rationale.",
+          feedback: sharedFeedback,
+          quote: sharedQuote,
+          scores: { clarity: 1.5, evidence: 1.5 },
+        };
+      }
+
+      let totalExperienceBefore = 0;
+      try {
+        const supabase = await createServerSupabase();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("total_experience")
+            .eq("id", user.id)
+            .maybeSingle();
+          totalExperienceBefore = Number(prof?.total_experience ?? 0);
+        }
+      } catch {
+        /* guest or missing Supabase env */
+      }
+
+      const result = buildLocalAiJudgedResult({
+        sessionId,
+        topicTitle,
+        userRole,
+        transcript,
+        debateFormat,
+        judgement: {
+          winner: soloJudgement.winner,
+          confidence: soloJudgement.confidence,
+          rationale: soloJudgement.rationale,
+          feedback: soloJudgement.feedback,
+          quote: soloJudgement.quote,
+          scores: soloJudgement.scores,
+        },
+        totalExperienceBefore,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        persisted: false,
+        result,
+      });
+    }
+
     let [judgementForPro, judgementForCon] = await Promise.all([
       judgeDebateAndFeedback({
         topicTitle,
@@ -200,7 +265,6 @@ export async function POST(request: Request) {
         transcript,
       }),
     ]);
-
     if (!hasEnoughContent) {
       const sharedFeedback = lowContentFallbackFeedback(ageBand);
       const sharedQuote =
@@ -238,7 +302,6 @@ export async function POST(request: Request) {
       winner = judgementForCon.winner;
       confidence = judgementForCon.confidence;
     }
-
     const mergedRationale = `Pro-view rationale: ${judgementForPro.rationale} Con-view rationale: ${judgementForCon.rationale}`;
     const judgement = {
       winner,
@@ -247,55 +310,6 @@ export async function POST(request: Request) {
       pro: judgementForPro,
       con: judgementForCon,
     };
-
-    const callerSide = userRole;
-    const callerFeedback = callerSide === "pro" ? judgement.pro.feedback : judgement.con.feedback;
-    const callerQuote = callerSide === "pro" ? judgement.pro.quote : judgement.con.quote;
-    const callerScores =
-      callerSide === "pro" ? judgement.pro.scores : judgement.con.scores;
-
-    if (!arenaRoomId) {
-      let totalExperienceBefore = 0;
-      try {
-        const supabase = await createServerSupabase();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user) {
-          const { data: prof } = await supabase
-            .from("profiles")
-            .select("total_experience")
-            .eq("id", user.id)
-            .maybeSingle();
-          totalExperienceBefore = Number(prof?.total_experience ?? 0);
-        }
-      } catch {
-        /* guest or missing Supabase env */
-      }
-
-      const result = buildLocalAiJudgedResult({
-        sessionId,
-        topicTitle,
-        userRole,
-        transcript,
-        debateFormat,
-        judgement: {
-          winner: judgement.winner,
-          confidence: judgement.confidence,
-          rationale: judgement.rationale,
-          feedback: callerFeedback,
-          quote: callerQuote,
-          scores: callerScores,
-        },
-        totalExperienceBefore,
-      });
-
-      return NextResponse.json({
-        ok: true,
-        persisted: false,
-        result,
-      });
-    }
 
     if (!isSupabaseConfigured()) {
       return NextResponse.json(

@@ -508,6 +508,76 @@ export function createForfeitResult(meta: ForfeitMeta): DebateResult {
   };
 }
 
+export function createJudgingUnavailableResult(
+  meta: ForfeitMeta,
+  options?: { reason?: string },
+): DebateResult {
+  const now = new Date();
+  const yourSide = meta.userRole === "con" ? "Con" : "Pro";
+  const id = `unjudged_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`;
+  const activeTranscript = readActiveDebateTranscript(meta.sessionId);
+  const transcript =
+    activeTranscript.length > 0
+      ? [...activeTranscript]
+      : [
+          {
+            speaker: "System",
+            text: `Debate opened: ${meta.topicTitle}`,
+            at: now.toISOString(),
+          },
+        ];
+
+  transcript.push({
+    speaker: "System",
+    text: "Round completed, but final AI judging was unavailable.",
+    at: now.toISOString(),
+  });
+
+  const scores = { clarity: 2.8, evidence: 2.8 };
+  const prog = progressionFieldsAfterMatch({
+    totalExperienceBefore: meta.totalExperienceBefore ?? 0,
+    outcome: "effort",
+    arenaRoomId: meta.arenaRoomId,
+    scores,
+  });
+  const reason = options?.reason?.trim();
+  const reasonSuffix = reason ? ` (${reason})` : "";
+
+  return {
+    id,
+    topicTitle: meta.topicTitle,
+    debatedAt: now.toISOString(),
+    outcome: "effort",
+    headline: "JUDGING UNAVAILABLE",
+    subline: `You completed the round as ${yourSide}, but final adjudication could not be generated.`,
+    ...prog,
+    feedback:
+      `You reached the end of the debate, but the AI judge could not return a final decision this time${reasonSuffix}. Your round is saved as completed effort, not a forfeit.`,
+    quote: "Completion counts. Retry adjudication later if available.",
+    scores,
+    suggestedTomes: [
+      {
+        title: "Round Reflection",
+        subtitle: "Extract your strongest claim",
+        kind: "rare",
+        label: "+2 Focus",
+        accent: "primary",
+        icon: "menu_book",
+      },
+      {
+        title: "Resilience Drill I",
+        subtitle: "Build consistency under noise",
+        kind: "enchanted",
+        label: "+1 Lvl",
+        accent: "tertiary",
+        icon: "psychology",
+      },
+    ],
+    loot: [{ label: "Completion Token x1", tone: "gold" }],
+    transcript,
+  };
+}
+
 /** Opponent wins because the other player ended/forfeited the arena debate. */
 export function createOpponentVictoryByForfeitResult(meta: ForfeitMeta): DebateResult {
   const now = new Date();

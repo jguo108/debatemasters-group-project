@@ -4,8 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DebateRoomTimer } from "@/components/DebateRoomTimer";
 import { finalizeDebateWithAi } from "@/lib/data/debate-finalize";
-import { recordDebaterExit } from "@/lib/data/debater-exit";
-import type { ForfeitMeta } from "@/lib/data/history-storage";
+import {
+  appendDebateResultToHistory,
+  createJudgingUnavailableResult,
+  type ForfeitMeta,
+} from "@/lib/data/history-storage";
+import { getUserProfileSnapshot } from "@/lib/data/profile-storage";
 
 export function SoloDebateTimeoutTimer({
   sessionMeta,
@@ -65,19 +69,31 @@ export function SoloDebateTimeoutTimer({
                   setIsResolving(true);
                   void (async () => {
                     try {
-                      const judged = await finalizeDebateWithAi(sessionMeta);
-                      if (judged.ok) {
-                        router.push(
-                          `/results/${encodeURIComponent(judged.resultId)}`,
-                        );
-                        return;
+                      let lastError = "";
+                      for (let attempt = 0; attempt < 3; attempt += 1) {
+                        const judged = await finalizeDebateWithAi(sessionMeta);
+                        if (judged.ok) {
+                          router.push(
+                            `/results/${encodeURIComponent(judged.resultId)}`,
+                          );
+                          return;
+                        }
+                        lastError = judged.error || "Could not generate AI judgment.";
+                        if (attempt < 2) {
+                          await new Promise((resolve) =>
+                            window.setTimeout(resolve, 800),
+                          );
+                        }
                       }
-                      const outcome = await recordDebaterExit(sessionMeta);
-                      if (outcome.type === "already_self") {
-                        router.push("/results");
-                        return;
-                      }
-                      router.push(`/results/${encodeURIComponent(outcome.resultId)}`);
+                      const neutral = createJudgingUnavailableResult(
+                        {
+                          ...sessionMeta,
+                          totalExperienceBefore: getUserProfileSnapshot().totalExperience,
+                        },
+                        { reason: lastError },
+                      );
+                      await appendDebateResultToHistory(neutral);
+                      router.push(`/results/${encodeURIComponent(neutral.id)}`);
                     } finally {
                       setIsResolving(false);
                     }

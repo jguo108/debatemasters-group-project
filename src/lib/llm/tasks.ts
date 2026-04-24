@@ -126,6 +126,24 @@ function calibrateUserScores(input: {
   };
 }
 
+function shouldRetryJudgeError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    msg.includes("429") ||
+    msg.includes("rate limit") ||
+    msg.includes("timeout") ||
+    msg.includes("timed out") ||
+    msg.includes("econnreset") ||
+    msg.includes("temporar") ||
+    msg.includes("service unavailable") ||
+    msg.includes("gateway")
+  );
+}
+
+async function waitMs(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function generateOpponentReply(
   input: OpponentReplyRequest,
 ): Promise<string> {
@@ -212,42 +230,66 @@ export async function judgeDebateAndFeedback(
 ): Promise<JudgeDebateOutput> {
   const { provider, model } = resolveLlmTask("judge");
   const userSide = input.userRole === "con" ? "con" : "pro";
-  const response = await provider.generate({
-    model,
-    temperature: 0.2,
-    maxTokens: 900,
-    jsonMode: "json_object",
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a neutral debate judge. Return strict JSON only. Evaluate argument quality and choose one winning side.",
-      },
-      {
-        role: "user",
-        content: [
-          `Topic: ${input.topicTitle}`,
-          `Format: ${input.debateFormat === "wsda" ? "WSDA" : "Standard"}`,
-          `User side: ${userSide.toUpperCase()}`,
-          ageBandToneGuide(input.ageBand),
-          "Evaluate based on the entire transcript provided below.",
-          "Transcript:",
-          renderTranscript(input.transcript),
-          "Return JSON with keys winner, confidence, rationale, feedback, quote, scores.",
-          'winner must be "pro" or "con".',
-          "confidence is a number 0-1.",
-          "scores is an object with numeric clarity and evidence in range 0-5, and these scores must evaluate the USER SIDE only (not the winner, not both sides combined).",
-          "Scoring rubric: 5 is excellent, 3 is mixed/average, 1 is very weak.",
-          "If the user side clearly loses with high confidence, user-side scores should usually be modest rather than high.",
-          "feedback should be 2-4 sentences and actionable.",
-          "feedback tone and vocabulary must match the audience age guidance above.",
-          "quote should be one memorable sentence.",
-        ].join("\n\n"),
-      },
-    ],
-  });
+  const messages = [
+    {
+      role: "system" as const,
+      content:
+        "You are a neutral debate judge. Return strict JSON only. Evaluate argument quality and choose one winning side.",
+    },
+    {
+      role: "user" as const,
+      content: [
+        `Topic: ${input.topicTitle}`,
+        `Format: ${input.debateFormat === "wsda" ? "WSDA" : "Standard"}`,
+        `User side: ${userSide.toUpperCase()}`,
+        ageBandToneGuide(input.ageBand),
+        "Evaluate based on the entire transcript provided below.",
+        "Transcript:",
+        renderTranscript(input.transcript),
+        "Return JSON with keys winner, confidence, rationale, feedback, quote, scores.",
+        'winner must be "pro" or "con".',
+        "confidence is a number 0-1.",
+        "scores is an object with numeric clarity and evidence in range 0-5, and these scores must evaluate the USER SIDE only (not the winner, not both sides combined).",
+        "Scoring rubric: 5 is excellent, 3 is mixed/average, 1 is very weak.",
+        "If the user side clearly loses with high confidence, user-side scores should usually be modest rather than high.",
+        "feedback should be 2-4 sentences and actionable.",
+        "feedback tone and vocabulary must match the audience age guidance above.",
+        "quote should be one memorable sentence.",
+      ].join("\n\n"),
+    },
+  ];
+  let responseText = "";
+  let lastError: unknown = null;
+  const retryBackoffMs = [0, 700, 1400];
+  for (let attempt = 0; attempt < retryBackoffMs.length; attempt += 1) {
+    if (retryBackoffMs[attempt] > 0) {
+      await waitMs(retryBackoffMs[attempt]);
+    }
+    try {
+      const response = await provider.generate({
+        model,
+        temperature: 0.2,
+        maxTokens: 900,
+        jsonMode: "json_object",
+        messages,
+      });
+      responseText = response.text;
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === retryBackoffMs.length - 1 || !shouldRetryJudgeError(error)) {
+        throw error;
+      }
+    }
+  }
+  if (!responseText) {
+    throw (lastError instanceof Error
+      ? lastError
+      : new Error("Judge model returned no response after retries."));
+  }
 
-  const parsed = parseJsonFromModel(response.text);
+  const parsed = parseJsonFromModel(responseText);
   const winner = parsed.winner === "con" ? "con" : "pro";
   const confidenceRaw =
     typeof parsed.confidence === "number" && Number.isFinite(parsed.confidence)
