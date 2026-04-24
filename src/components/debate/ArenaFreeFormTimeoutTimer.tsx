@@ -7,7 +7,7 @@ import { finalizeDebateWithAi } from "@/lib/data/debate-finalize";
 import type { ForfeitMeta } from "@/lib/data/history-storage";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/browser-client";
 
-const FREE_FORM_TOTAL_SECONDS = 60;
+const FREE_FORM_TOTAL_SECONDS = 180;
 
 export function ArenaFreeFormTimeoutTimer({
   sessionMeta,
@@ -131,7 +131,7 @@ export function ArenaFreeFormTimeoutTimer({
     <>
       <DebateRoomTimer
         isSoloAi={false}
-        staticMmSs="01:00"
+        staticMmSs="03:00"
         controlledSeconds={syncedSecondsLeft}
         compact={compact}
       />

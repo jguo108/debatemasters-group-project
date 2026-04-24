@@ -239,7 +239,7 @@ export default async function DebatePage({ searchParams }: DebatePageProps) {
                           Tip
                         </h3>
                         <p className="pixel-text-xs leading-normal text-red-200">
-                          Arena free-form rounds last 1 minute. Let the timer finish for AI
+                          Arena free-form rounds last 3 minutes. Let the timer finish for AI
                           judging; ending early records a forfeit.
                         </p>
                       </div>

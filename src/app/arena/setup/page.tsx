@@ -23,7 +23,7 @@ const FORMAT_CARDS: FormatCard[] = [
     title: "Free Form",
     subtitle: "Open chat debate",
     details:
-      "No speech phases. You and your opponent can exchange arguments naturally. Arena free-form rounds always run for 1 minute.",
+      "No speech phases. You and your opponent can exchange arguments naturally. Arena free-form rounds always run for 3 minutes.",
     icon: "chat",
     accent: "border-blue-600 bg-blue-700",
   },
