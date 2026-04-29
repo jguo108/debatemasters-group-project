@@ -1,4 +1,6 @@
-﻿This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Project
+
+This is an online debate plaform that allows users of any age to practice and have fun with debate online! You can debate with AI and surprise yourself with a random debate topic and debate opponent！
 
 ## Getting Started
 
